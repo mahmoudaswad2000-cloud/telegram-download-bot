@@ -9,13 +9,37 @@ bot = telebot.TeleBot(TOKEN)
 INSTAGRAM_URL = "https://www.instagram.com/mah__asw"
 AD_URL = "https://uplcm.com/4/11968073"
 
-# تخزين حالة المستخدمين بدقة
+# تتبع حالة كل مستخدم بدقة لمنع تجاوز الإعلان
 user_ad_status = {}
+
+# دالة لحفظ ومعرفة عدد المستخدمين في ملف نصي محلي
+def save_user(user_id):
+    users = set()
+    if os.path.exists('users.txt'):
+        with open('users.txt', 'r') as f:
+            users = set(line.strip() for line in f if line.strip())
+    
+    if str(user_id) not in users:
+        with open('users.txt', 'a') as f:
+            f.write(f"{user_id}\n")
+
+def get_users_count():
+    if not os.path.exists('users.txt'):
+        return 0
+    with open('users.txt', 'r') as f:
+        return len(set(line.strip() for line in f if line.strip()))
+
+# أمر الإحصائيات لمعرفة عدد مستخدمي البوت
+@bot.message_handler(commands=['stats'])
+def show_stats(message):
+    count = get_users_count()
+    bot.reply_to(message, f"📊 **إحصائيات البوت:**\n\nعدد المستخدِمين الإجمالي: **{count}** مستخدم.")
 
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
     user_id = message.from_user.id
-    user_ad_status[user_id] = False # مطالب بمشاهدة الإعلان
+    save_user(user_id)  # تسجيل المستخدم عند الضغط على start
+    user_ad_status[user_id] = False 
     
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("🔗 1. تابعنا على إنستغرام (@mah__asw)", url=INSTAGRAM_URL))
@@ -23,7 +47,7 @@ def send_welcome(message):
     
     bot.send_message(
         message.chat.id,
-        "مرحباً بك في بوت التحميل! 🚀\n\nللبدء، يرجى متابعة حسابنا الإجباري على الإنستغرام ثم الضغط على زر التأكيد أدناه:",
+        "مرحباً بك في بوت تحميل الفيديوهات الشامل! 🚀\n\nيدعم البوت التحميل من **يوتيوب، إنستغرام، تيك توك، فيسبوك، تويتر** وجميع المنصات.\n\nللبدء، يرجى متابعة حسابنا الإجباري على الإنستغرام أولاً ثم الضغط على زر التأكيد أدناه:",
         reply_markup=markup
     )
 
@@ -36,7 +60,7 @@ def after_instagram(call):
     markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان لفتح التحميل", callback_data="click_ad"))
     
     bot.edit_message_text(
-        "ممتاز! تم تأكيد الإنستغرام بنجاح ✅\n\nالآن لتحميل أي فيديو، يجب عليك الضغط على زر الإعلان أدناه أولاً:",
+        "ممتاز! تم تأكيد الإنستغرام بنجاح ✅\n\nالآن لتحميل أي فيديو من أي منصة، يجب عليك الضغط على زر الإعلان أدناه أولاً:",
         call.message.chat.id,
         call.message.message_id,
         reply_markup=markup
@@ -45,20 +69,18 @@ def after_instagram(call):
 @bot.callback_query_handler(func=lambda call: call.data == "click_ad")
 def handle_ad_click(call):
     user_id = call.from_user.id
-    # منح إذن التحميل مؤقتاً لهذه اللحظة
     user_ad_status[user_id] = True
-    
-    # فتح رابط الإعلان في متصفح المستخدم
     bot.answer_callback_query(call.id, url=AD_URL)
     
     bot.send_message(
         call.message.chat.id,
-        "✅ شكراً لك! تم تفعيل إذن التحميل. أرسل رابط الفيديو الآن وسأقوم بتحميله فوراً:"
+        "✅ شكراً لك! تم تفعيل إذن التحميل. أرسل رابط الفيديو (من يوتيوب، تيك توك، إنستغرام، فيسبوك...) وسأقوم بتحميله فوراً:"
     )
 
 @bot.message_handler(func=lambda message: True)
 def handle_download(message):
     user_id = message.from_user.id
+    save_user(user_id)  # تسجيل المستخدم عند إرسال أي رابط أو رسالة
     text = message.text.strip()
     
     if text.startswith('http'):
@@ -74,14 +96,14 @@ def handle_download(message):
             )
             return
 
-        # إذا ضغط على الزر، نقوم بإبطال الإذن فوراً لكي يضطر لضغط الإعلان في الفيديو القادم
+        # إبطال الإذن فوراً لكي يضطر لضغط الإعلان في الفيديو القادم
         user_ad_status[user_id] = False
 
         msg = bot.reply_to(message, "⏳ جاري تحميل الفيديو، يرجى الانتظار...")
         try:
             ydl_opts = {
                 'outtmpl': 'downloaded_video.mp4',
-                'format': 'mp4/best',
+                'format': 'best/bestvideo+bestaudio/best',
                 'max_filesize': 50 * 1024 * 1024,
             }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
