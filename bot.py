@@ -9,7 +9,6 @@ bot = telebot.TeleBot(TOKEN)
 INSTAGRAM_URL = "https://www.instagram.com/mah__asw"
 AD_URL = "https://uplcm.com/4/11968073"
 
-# تتبع حالات المستخدمين
 user_states = {}
 
 def get_user_state(user_id):
@@ -31,7 +30,7 @@ def send_welcome(message):
     
     bot.send_message(
         message.chat.id,
-        "مرحباً بك في بوت التحميل! 🚀\n\nللبدء لأول مرة، يرجى متابعة حسابنا الإجباري على الإنستغرام ثم الضغط على زر التأكيد:",
+        "مرحباً بك في بوت التحميل! 🚀\n\nللبدء لأول مرة، يرجى متابعة حسابنا الإجباري على الإنستغرام ثم الضغط على زر التأكيد أدناه:",
         reply_markup=markup
     )
 
@@ -39,13 +38,13 @@ def send_welcome(message):
 def after_instagram(call):
     user_id = call.from_user.id
     state = get_user_state(user_id)
-    state['step'] = 'watch_ad'
+    state['step'] = 'ready_to_download'
     
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان", url=AD_URL))
     
     bot.edit_message_text(
-        "ممتاز! تم تأكيد الإنستغرام بنجاح ✅\n\nالآن لتحميل أي فيديو، يرجى مشاهدة الإعلان عبر الزر أدناه، ثم أرسل رابط الفيديو مباشرة:",
+        "ممتاز! تم تأكيد الإنستغرام بنجاح ✅\n\nالآن لتحميل أي فيديو، شاهد الإعلان عبر الزر أدناه ثم أرسل رابط الفيديو مباشرة:",
         call.message.chat.id,
         call.message.message_id,
         reply_markup=markup
@@ -77,15 +76,13 @@ def handle_download(message):
                     bot.send_video(message.chat.id, vid)
                 bot.delete_message(message.chat.id, msg.message_id)
 
-            # إرسال زر مشاهدة الإعلان فقط لتحميل الفيديو القادم (بدون أزرار تحقق)
-            state['step'] = 'watch_ad'
-            
+            # يرسل زر الإعلان فقط منفرداً دون أي أزرار أخرى
             markup = InlineKeyboardMarkup()
-            markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان لتحميل فيديو آخر", url=AD_URL))
+            markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان", url=AD_URL))
             
             bot.send_message(
                 message.chat.id,
-                "💡 لتحميل فيديو آخر، شاهد الإعلان عبر الزر أدناه ثم أرسل رابط الفيديو مباشرة:",
+                "💡 لتحميل فيديو آخر، اضغط على زر الإعلان أدناه ثم أرسل رابط الفيديو الجديد مباشرة:",
                 reply_markup=markup
             )
 
