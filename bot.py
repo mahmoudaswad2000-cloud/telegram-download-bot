@@ -11,15 +11,11 @@ INSTAGRAM_URL = "https://www.instagram.com/mah__asw"
 AD_URL = "https://uplcm.com/4/11968073"
 
 AD_WAIT_SECONDS = 10
-
-# تتبع النقرات والخطوات لكل مستخدم
 user_states = {}
 
 def get_user_state(user_id):
     if user_id not in user_states:
         user_states[user_id] = {
-            'clicked_insta': False,
-            'clicked_ad': False,
             'authorized': False,
             'remaining': AD_WAIT_SECONDS
         }
@@ -51,36 +47,15 @@ def send_welcome(message):
     save_user(user_id)
     
     state = get_user_state(user_id)
-    state['clicked_insta'] = False
-    state['clicked_ad'] = False
     state['authorized'] = False
     
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("🔗 1. تابعنا على إنستغرام (@mah__asw)", url=INSTAGRAM_URL))
-    markup.add(InlineKeyboardButton("✅ 2. تم الاشتراك، متابعة", callback_data="check_insta"))
+    markup.add(InlineKeyboardButton("✅ 2. تم الاشتراك، متابعة", callback_data="done_insta"))
     
     bot.send_message(
         message.chat.id,
-        "مرحباً بك في بوت تحميل الفيديوهات الشامل! 🚀\n\nيدعم البوت التحميل من **يوتيوب، إنستغرام، تيك توك، فيسبوك، تويتر** وجميع المنصات.\n\n⚠️ **شرط الاستخدام:** يجب عليك الضغط على زر الإنستغرام ومتابعتنا أولاً لتفعيل زر التأكيد:",
-        reply_markup=markup
-    )
-
-# استقبال الضغط على زر التحقق من الإنستغرام
-@bot.callback_query_handler(func=lambda call: call.data == "check_insta")
-def check_insta_callback(call):
-    user_id = call.from_user.id
-    state = get_user_state(user_id)
-    
-    # تحويل حالة المستخدم إلى أنه قمت بالضغط على الرابط
-    # نطلب منه الضغط على رابط الإنستغرام إذا لم يقم بذلك
-    markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("🔗 1. اضغط هنا لمتابعة الإنستغرام أولاً", url=INSTAGRAM_URL))
-    markup.add(InlineKeyboardButton("✅ 2. تأكيد المتابعة والدخول", callback_data="done_insta"))
-    
-    bot.edit_message_text(
-        "⚠️ **يرجى التأكد من الضغط على رابط الإنستغرام ومتابعة الحساب (@mah__asw) أولاً!**\n\nبعد الضغط على الرابط ومتابعتنا، اضغط على زر التاكيد أدناه:",
-        call.message.chat.id,
-        call.message.message_id,
+        "مرحباً بك في بوت تحميل الفيديوهات الشامل! 🚀\n\nيدعم البوت التحميل من **يوتيوب، إنستغرام، تيك توك، فيسبوك، تويتر** وجميع المنصات.\n\nللبدء، يرجى متابعة حسابنا الإجباري على الإنستغرام أولاً ثم الضغط على زر التأكيد أدناه:",
         reply_markup=markup
     )
 
@@ -88,33 +63,33 @@ def check_insta_callback(call):
 def after_instagram(call):
     user_id = call.from_user.id
     state = get_user_state(user_id)
-    state['clicked_ad'] = False
     state['authorized'] = False
     state['remaining'] = AD_WAIT_SECONDS
     
+    # زر مدمج واحد للإعلان والتحقق
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("📢 1. اضغط هنا لمشاهدة الإعلان", url=AD_URL))
-    markup.add(InlineKeyboardButton("⏳ 2. ابدأ عداد التفعيل (اضغط الإعلان أولاً)", callback_data="start_timer"))
+    markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان وتفعيل التحميل", callback_data="click_ad_and_verify"))
     
     bot.edit_message_text(
-        "ممتاز! تم تأكيد المتابعة بنجاح ✅\n\nالآن لفتح إذن التحميل:\n1️⃣ **اضغط على زر الإعلان أولاً.**\n2️⃣ ثم اضغط على زر **بدء العداد** وانتظر 10 ثوانٍ لفتح التحميل:",
+        "ممتاز! تم تأكيد متابعة الإنستغرام بنجاح ✅\n\nالآن لتحميل أي فيديو، اضغط على زر الإعلان المدمج أدناه للفتح والتحقق المباشر:",
         call.message.chat.id,
         call.message.message_id,
         reply_markup=markup
     )
 
-# عند الضغط على زر بدء العداد
-@bot.callback_query_handler(func=lambda call: call.data == "start_timer")
-def start_timer_callback(call):
+# معالجة الضغطة المدمجة للإعلان والتحقق
+@bot.callback_query_handler(func=lambda call: call.data == "click_ad_and_verify")
+def handle_ad_and_verify(call):
     user_id = call.from_user.id
     state = get_user_state(user_id)
 
-    # حماية: إذا حاول الضغط على العداد دون الضغط على الإعلان أو إذا كان قيد العد
-    bot.answer_callback_query(call.id, text="جاري بدء العداد... تأكد من فتح صفحة الإعلان!")
+    # 1. فتح رابط الإعلان فوراً عبر التنبيه المباشر
+    bot.answer_callback_query(call.id, url=AD_URL)
 
     if state['remaining'] <= 0:
         state['remaining'] = AD_WAIT_SECONDS
 
+    # 2. تشغيل العداد التنازلي التفاعلي
     msg = bot.send_message(call.message.chat.id, f"⏳ جاري تحقق مشاهدة الإعلان... متبقي **{state['remaining']}** ثوانٍ.")
 
     while state['remaining'] > 0:
@@ -150,17 +125,16 @@ def handle_download(message):
         if not state.get('authorized', False):
             rem = state.get('remaining', AD_WAIT_SECONDS)
             markup = InlineKeyboardMarkup()
-            markup.add(InlineKeyboardButton("📢 1. اضغط هنا لمشاهدة الإعلان", url=AD_URL))
-            markup.add(InlineKeyboardButton("⏳ 2. اضغط هنا لبدء العداد", callback_data="start_timer"))
+            markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان وتفعيل التحميل", callback_data="click_ad_and_verify"))
             
             bot.reply_to(
                 message,
-                f"⚠️ **عذراً، لم تُكمل مشاهدة الإعلان بعد!**\nمتبقي **{rem}** ثوانٍ لفتح التحميل. يرجى الضغط على زر الإعلان والانتظار حتى انتهاء العداد:",
+                f"⚠️ **تمهل حتى ينتهي العداد!**\nعذراً، لم تنتهِ من مشاهدة الإعلان بعد (متبقي **{rem}** ثوانٍ). يرجى الضغط على الزر المدمج أدناه للتحقق والانتظار:",
                 reply_markup=markup
             )
             return
 
-        # إعادة ضبط الصلاحية للفيديو القادم
+        # إبطال التفعيل وإعادة ضبط العداد للفيديو التالي
         state['authorized'] = False
         state['remaining'] = AD_WAIT_SECONDS
 
@@ -180,12 +154,11 @@ def handle_download(message):
                 bot.delete_message(message.chat.id, msg.message_id)
 
             markup = InlineKeyboardMarkup()
-            markup.add(InlineKeyboardButton("📢 1. مشاهدة الإعلان لتحميل فيديو آخر", url=AD_URL))
-            markup.add(InlineKeyboardButton("⏳ 2. لبدء عداد الفيديو التالي", callback_data="start_timer"))
+            markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان لتحميل فيديو آخر", callback_data="click_ad_and_verify"))
             
             bot.send_message(
                 message.chat.id,
-                "💡 لتحميل فيديو آخر، اضغط على زر الإعلان ثم زر بدء العداد أدناه:",
+                "💡 لتحميل فيديو آخر، اضغط على زر الإعلان أدناه وانتظر العداد:",
                 reply_markup=markup
             )
 
@@ -198,4 +171,3 @@ def handle_download(message):
         bot.reply_to(message, "الرجاء إرسال رابط فيديو صالح يبدأ بـ http أو إرسال /start للبدء.")
 
 bot.infinity_polling()
-                
