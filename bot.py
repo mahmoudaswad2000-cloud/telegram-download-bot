@@ -1,5 +1,4 @@
 import os
-import time
 import telebot
 import yt_dlp
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -10,13 +9,13 @@ bot = telebot.TeleBot(TOKEN)
 INSTAGRAM_URL = "https://www.instagram.com/mah__asw"
 AD_URL = "https://uplcm.com/4/11968073"
 
-# قاموس لتتبع حالة كل مستخدم
+# تتبع حالات المستخدمين
 user_states = {}
 
 def get_user_state(user_id):
     if user_id not in user_states:
         user_states[user_id] = {
-            'step': 'subscribe_instagram'
+            'step': 'instagram_required'
         }
     return user_states[user_id]
 
@@ -24,49 +23,32 @@ def get_user_state(user_id):
 def send_welcome(message):
     user_id = message.from_user.id
     state = get_user_state(user_id)
-    state['step'] = 'subscribe_instagram'
+    state['step'] = 'instagram_required'
     
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("🔗 1. تابعنا على إنستغرام", url=INSTAGRAM_URL))
-    markup.add(InlineKeyboardButton("✅ 2. تم الاشتراك، متابعة", callback_data="verified_instagram"))
+    markup.add(InlineKeyboardButton("🔗 1. تابعنا على إنستغرام (@mah__asw)", url=INSTAGRAM_URL))
+    markup.add(InlineKeyboardButton("✅ 2. تم الاشتراك، متابعة", callback_data="done_insta"))
     
     bot.send_message(
         message.chat.id,
-        "مرحباً بك في بوت التحميل! 🚀\n\nللبدء، يرجى متابعة حسابنا الإجباري على الإنستغرام (`@mah__asw`) ثم الضغط على زر التأكيد:",
+        "مرحباً بك في بوت التحميل! 🚀\n\nللبدء لأول مرة، يرجى متابعة حسابنا الإجباري على الإنستغرام ثم الضغط على زر التأكيد:",
         reply_markup=markup
     )
 
-@bot.callback_query_handler(func=lambda call: call.data == "verified_instagram")
-def verify_instagram(call):
+@bot.callback_query_handler(func=lambda call: call.data == "done_insta")
+def after_instagram(call):
     user_id = call.from_user.id
     state = get_user_state(user_id)
-    
-    # الانتقال لخطوة مشاهدة الإعلان
     state['step'] = 'watch_ad'
     
     markup = InlineKeyboardMarkup()
-    # بمجرد ضغط المستخدم على هذا الزر (رابط الإعلان)، سيتم فتح الإعلان، وبما أنه زر رابط، سنقوم بتوفير زر انتقال مباشر لفتح التحميل أو نجعله ينتقل للخطوة التالية
-    markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان وفتح التحميل", url=AD_URL))
-    markup.add(InlineKeyboardButton("✅ تم مشاهدة الإعلان (تفعيل التحميل)", callback_data="ready_download"))
+    markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان", url=AD_URL))
     
     bot.edit_message_text(
-        "ممتاز! تم تأكيد إنستغرام ✅\n\nالخطوة الأخيرة: اضغط على رابط الإعلان أدناه، وبعدها اضغط على زر تفعيل التح:",
+        "ممتاز! تم تأكيد الإنستغرام بنجاح ✅\n\nالآن لتحميل أي فيديو، يرجى مشاهدة الإعلان عبر الزر أدناه، ثم أرسل رابط الفيديو مباشرة:",
         call.message.chat.id,
         call.message.message_id,
         reply_markup=markup
-    )
-
-@bot.callback_query_handler(func=lambda call: call.data == "ready_download")
-def activate_download(call):
-    user_id = call.from_user.id
-    state = get_user_state(user_id)
-    
-    state['step'] = 'ready_to_download'
-    
-    bot.edit_message_text(
-        "🎯 رائع جداً! تم تفعيل البوت بنجاح.\n\nالآن أرسل لي رابط الفيديو (من إنستغرام أو أي منصة) وسأقوم بتحميله وإرساله لك فوراً.",
-        call.message.chat.id,
-        call.message.message_id
     )
 
 @bot.message_handler(func=lambda message: True)
@@ -76,7 +58,7 @@ def handle_download(message):
     state = get_user_state(user_id)
     
     if text.startswith('http'):
-        if state['step'] != 'ready_to_download':
+        if state['step'] == 'instagram_required':
             send_welcome(message)
             return
 
@@ -95,16 +77,15 @@ def handle_download(message):
                     bot.send_video(message.chat.id, vid)
                 bot.delete_message(message.chat.id, msg.message_id)
 
-            # إعادة قفل البوت وإلزام الإعلان لتحميل فيديو جديد
+            # إرسال زر مشاهدة الإعلان فقط لتحميل الفيديو القادم (بدون أزرار تحقق)
             state['step'] = 'watch_ad'
             
             markup = InlineKeyboardMarkup()
             markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان لتحميل فيديو آخر", url=AD_URL))
-            markup.add(InlineKeyboardButton("✅ تم مشاهدة الإعلان وتفعيل التحميل", callback_data="ready_download"))
             
             bot.send_message(
                 message.chat.id,
-                "💡 لتحميل فيديو آخر، يرجى مشاهدة الإعلان مجدداً ثم تفعيل التحميل:",
+                "💡 لتحميل فيديو آخر، شاهد الإعلان عبر الزر أدناه ثم أرسل رابط الفيديو مباشرة:",
                 reply_markup=markup
             )
 
