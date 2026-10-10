@@ -110,8 +110,16 @@ def valid_url(text):
 
 def create_ad_keyboard():
     markup = InlineKeyboardMarkup(row_width=1)
+    
+    # إضافة زر الإعلان
     markup.add(InlineKeyboardButton("📢 فتح الإعلان", url=AD_URL))
-    markup.add(InlineKeyboardButton("✅ شاهدت الإعلان، أؤكد المتابعة", callback_data="confirm_ad"))
+    
+    # إضافة زر الانستغرام
+    markup.add(InlineKeyboardButton("📸 متابعة الحساب على انستغرام", url=INSTAGRAM_URL))
+    
+    # زر التأكيد للمتابعة
+    markup.add(InlineKeyboardButton("✅ أتممت الشروط، أؤكد المتابعة", callback_data="confirm_ad"))
+    
     return markup
 
 
@@ -138,7 +146,7 @@ def start_command(message):
     text = (
         "مرحباً بك في Media Downloader Bot 🚀\n\n"
         "أرسل رابط فيديو عام من منصة مدعومة.\n\n"
-        "📢 قبل التحميل، يجب فتح صفحة الإعلان ثم تأكيد المتابعة."
+        "📢 قبل التحميل، يجب زيارة صفحة الإعلان ومتابعة حساب الإنستغرام ثم تأكيد المتابعة."
     )
     bot.send_message(message.chat.id, text)
 
@@ -165,10 +173,11 @@ def receive_video(message):
         send_tracked(
             user_id,
             chat_id,
-            "⚠️ لتحميل الفيديو:\n\n"
-            "1️⃣ اضغط على زر فتح الإعلان.\n"
-            "2️⃣ ارجع إلى البوت واضغط زر التأكيد.\n\n"
-            "إذا لم تؤكد خلال 10 ثوانٍ، سأذكّرك.",
+            "⚠️ لتحميل الفيديو يرجى إتمام الخطوات التالية:\n\n"
+            "1️⃣ اضغط على زر **فتح الإعلان**.\n"
+            "2️⃣ اضغط على زر **متابعة انستغرام**.\n"
+            "3️⃣ ارجع واضغط زر **التأكيد** بالأسفل.",
+            parse_mode="Markdown",
             reply_markup=create_ad_keyboard()
         )
 
@@ -193,7 +202,7 @@ def send_confirmation_reminder(user_id, chat_id):
             user_id,
             chat_id,
             "⚠️ لم يتم تأكيد المتابعة بعد!\n\n"
-            "شاهد الإعلان أولاً، ثم اضغط زر التأكيد.",
+            "يرجى فتح الإعلان ومتابعة الانستغرام ثم الضغط على زر التأكيد.",
             reply_markup=create_ad_keyboard()
         )
     except Exception:
