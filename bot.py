@@ -55,24 +55,26 @@ def send_welcome(message):
 @bot.callback_query_handler(func=lambda call: call.data == "done_insta")
 def after_instagram(call):
     user_id = call.from_user.id
-    user_ad_status[user_id] = False
+    user_ad_status[user_id] = True  # تفعيل حالة مشاهدة الإعلان بمجرد الضغط المباشر على الزر وتوجيهه للرابط
     
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان لفتح التحميل", callback_data="click_ad"))
+    # تم تغيير الزر هنا ليصبح رابطاً مباشراً (url) يفتح الإعلان حتماً بدون مشاكل
+    markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان لفتح التحميل", url=AD_URL))
+    markup.add(InlineKeyboardButton("✅ تم مشاهدة الإعلان، ابدأ التحميل", callback_data="confirm_ad"))
     
     bot.edit_message_text(
-        "ممتاز! تم تأكيد الإنستغرام بنجاح ✅\n\nالآن لتحميل أي فيديو من أي منصة، يجب عليك الضغط على زر الإعلان أدناه أولاً:",
+        "ممتاز! تم تأكيد الإنستغرام بنجاح ✅\n\nالآن اضغط على زر الإعلان لفتحه، ثم اضغط على زر تأكيد المشاهدة أدناه لإرسال روابط الفيديوهات:",
         call.message.chat.id,
         call.message.message_id,
         reply_markup=markup
     )
 
-@bot.callback_query_handler(func=lambda call: call.data == "click_ad")
-def handle_ad_click(call):
+@bot.callback_query_handler(func=lambda call: call.data == "confirm_ad")
+def confirm_ad_view(call):
     user_id = call.from_user.id
     user_ad_status[user_id] = True
-    bot.answer_callback_query(call.id, url=AD_URL)
     
+    bot.answer_callback_query(call.id, text="تم تفعيل التحميل بنجاح!")
     bot.send_message(
         call.message.chat.id,
         "✅ شكراً لك! تم تفعيل إذن التحميل. أرسل رابط الفيديو (من يوتيوب، تيك توك، إنستغرام، فيسبوك...) وسأقوم بتحميله فوراً:"
@@ -88,11 +90,12 @@ def handle_download(message):
         # التحقق الحاسم: هل ضغط المستخدم على زر الإعلان؟
         if not user_ad_status.get(user_id, False):
             markup = InlineKeyboardMarkup()
-            markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان أولاً", callback_data="click_ad"))
+            markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان", url=AD_URL))
+            markup.add(InlineKeyboardButton("✅ تأكيد مشاهدة الإعلان", callback_data="confirm_ad"))
             
             bot.reply_to(
                 message,
-                "⚠️ عذراً! لا يمكنك تحميل الفيديو حتى تضغط على زر الإعلان أدناه أولاً:",
+                "⚠️ عذراً! لا يمكنك تحميل الفيديو حتى تشاهد الإعلان وتضغط على تأكيد المشاهدة أدناه:",
                 reply_markup=markup
             )
             return
@@ -116,13 +119,14 @@ def handle_download(message):
                     bot.send_video(message.chat.id, vid)
                 bot.delete_message(message.chat.id, msg.message_id)
 
-            # إرسال زر الإعلان فقط لتحميل الفيديو القادم
+            # إرسال زر الإعلان لتحميل الفيديو القادم
             markup = InlineKeyboardMarkup()
-            markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان لتحميل فيديو آخر", callback_data="click_ad"))
+            markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان", url=AD_URL))
+            markup.add(InlineKeyboardButton("✅ تأكيد مشاهدة الإعلان", callback_data="confirm_ad"))
             
             bot.send_message(
                 message.chat.id,
-                "💡 لتحميل فيديو آخر، اضغط على زر الإعلان أدناه أولاً ثم أرسل الرابط:",
+                "💡 لتحميل فيديو آخر، اضغط على زر الإعلان ثم تأكيد المشاهدة أدناه، ثم أرسل الرابط:",
                 reply_markup=markup
             )
 
@@ -135,3 +139,4 @@ def handle_download(message):
         bot.reply_to(message, "الرجاء إرسال رابط فيديو صالح يبدأ بـ http أو إرسال /start للبدء.")
 
 bot.infinity_polling(skip_pending=True)
+    
