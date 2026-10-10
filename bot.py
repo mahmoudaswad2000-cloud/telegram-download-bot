@@ -3,7 +3,7 @@ import telebot
 import yt_dlp
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-# التوكن الجديد المحدث
+# التوكن المحدث
 TOKEN = "8823255880:AAHEzXAbs1q1EZZoH2lbWjQEVXPlInHBzno"
 bot = telebot.TeleBot(TOKEN)
 
@@ -11,7 +11,7 @@ bot = telebot.TeleBot(TOKEN)
 INSTAGRAM_URL = "https://www.instagram.com/mah__asw?psln=bHVtbTd0NGVkaWh2"
 AD_URL = "https://uplcm.com/4/11968073"
 
-# تتبع حالة مشاهدة الإعلان لكل مستخدم
+# تتبع حالة الإعلان لضمان مشاهدته لكل فيديو
 user_ad_status = {}
 
 def save_user(user_id):
@@ -39,7 +39,7 @@ def show_stats(message):
 def send_welcome(message):
     user_id = message.from_user.id
     save_user(user_id)
-    user_ad_status[user_id] = False 
+    user_ad_status[user_id] = False  # إعادة القفل عند البدء
     
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("🔗 1. تابعنا على إنستغرام (@mah__asw)", url=INSTAGRAM_URL))
@@ -54,10 +54,9 @@ def send_welcome(message):
 @bot.callback_query_handler(func=lambda call: call.data == "done_insta")
 def after_instagram(call):
     user_id = call.from_user.id
-    user_ad_status[user_id] = True  # تفعيل الصلاحية فور إظهار رابط الإعلان المباشر
+    user_ad_status[user_id] = False  # إبقاء الإذن مغلقاً حتى يتم الضغط على الإعلان
     
     markup = InlineKeyboardMarkup()
-    # تعديل الزر هنا ليصبح زراً بمؤشر رابط مباشر (url) يعمل فوراً بدون تجميد
     markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان لفتح التحميل", url=AD_URL))
     
     bot.edit_message_text(
@@ -74,21 +73,22 @@ def handle_download(message):
     text = message.text.strip()
     
     if text.startswith('http'):
-        # التحقق من الضغط على زر الإعلان
+        # إذا لم يشاهد الإعلان أو انقضت صلاحيته للطلب الجديد
         if not user_ad_status.get(user_id, False):
-            # إصلاح زر إعادة طلب الإعلان ليفتح الرابط المباشر فوراً وتفعيل الصلاحية
+            # إعطاء الإذن للمرة القادمة بمجرد ظهور زر الإعلان المباشر وفتحه
             user_ad_status[user_id] = True
+            
             markup = InlineKeyboardMarkup()
             markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان أولاً", url=AD_URL))
             
             bot.reply_to(
                 message,
-                "⚠️ عذراً! لا يمكنك تحميل الفيديو حتى تضغط على زر الإعلان أدناه أولاً (اضغط على الزر ثم أعد إرسال الرابط):",
+                "⚠️ عذراً! لا يمكنك تحميل الفيديو حتى تضغط على زر الإعلان أدناه أولاً:",
                 reply_markup=markup
             )
             return
 
-        # إبطال الصلاحية فوراً للفيديو التالي لضمان أداء الإعلان مجدداً
+        # تصفير الإذن فوراً للفيديو القادم قبل البدء بالتحميل
         user_ad_status[user_id] = False
 
         file_name = f"video_{user_id}.mp4"
@@ -107,19 +107,18 @@ def handle_download(message):
                     bot.send_video(message.chat.id, vid)
                 bot.delete_message(message.chat.id, msg.message_id)
 
-            # تحضير زر الإعلان المباشر للفيديو القادم
-            user_ad_status[user_id] = True
+            # إظهار زر الإعلان المباشر لإلزام مشاهدته قبل تحميل الفيديو القادم
             markup = InlineKeyboardMarkup()
             markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان لتحميل فيديو آخر", url=AD_URL))
             
             bot.send_message(
                 message.chat.id,
-                "💡 لتحميل فيديو آخر، اضغط على زر الإعلان أدناه ثم أرسل الرابط مباشرة:",
+                "💡 لتحميل فيديو آخر، اضغط على زر الإعلان أدناه أولاً ثم أرسل الرابط:",
                 reply_markup=markup
             )
 
         except Exception as e:
-            user_ad_status[user_id] = True
+            user_ad_status[user_id] = True  # إرجاع الصلاحية في حال فشل التحميل
             bot.edit_message_text(f"❌ حدث خطأ أثناء التحميل: تأكد من أن الرابط صالح وعام.\nالتفاصيل: {str(e)}", message.chat.id, msg.message_id)
         finally:
             if os.path.exists(file_name):
