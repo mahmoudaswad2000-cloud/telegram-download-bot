@@ -28,7 +28,7 @@ DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 if not TOKEN:
     raise RuntimeError(
-        "لم يتم تعيين TELEGRAM_BOT_TOKEN. "
+        "لم يتم تعيين 8823255880:AAFUlGDBt5HWNt6qCzrk8IkXRy3_O2xFfW4. "
         "أضف توكن البوت الجديد إلى متغيرات البيئة."
     )
 
