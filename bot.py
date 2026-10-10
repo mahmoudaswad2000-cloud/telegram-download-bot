@@ -9,11 +9,16 @@ bot = telebot.TeleBot(TOKEN)
 INSTAGRAM_URL = "https://www.instagram.com/mah__asw"
 AD_URL = "https://uplcm.com/4/11968073"
 
+# تتبع حالة كل مستخدم بدقة لمنع تجاوز الإعلان
+user_ad_status = {}
+
+# دالة لحفظ ومعرفة عدد المستخدمين في ملف نصي محلي
 def save_user(user_id):
     users = set()
     if os.path.exists('users.txt'):
         with open('users.txt', 'r') as f:
             users = set(line.strip() for line in f if line.strip())
+    
     if str(user_id) not in users:
         with open('users.txt', 'a') as f:
             f.write(f"{user_id}\n")
@@ -24,6 +29,7 @@ def get_users_count():
     with open('users.txt', 'r') as f:
         return len(set(line.strip() for line in f if line.strip()))
 
+# أمر الإحصائيات لمعرفة عدد مستخدمي البوت
 @bot.message_handler(commands=['stats'])
 def show_stats(message):
     count = get_users_count()
@@ -32,27 +38,68 @@ def show_stats(message):
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
     user_id = message.from_user.id
-    save_user(user_id)
+    save_user(user_id)  # تسجيل المستخدم عند الضغط على start
+    user_ad_status[user_id] = False 
     
     markup = InlineKeyboardMarkup()
-    # إبقاء زر تابعنا على إنستغرام فقط دون زر التحقق الوهمي
-    markup.add(InlineKeyboardButton("🔗 تابعنا على إنستغرام (@mah__asw)", url=INSTAGRAM_URL))
-    markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان وبدء التحميل", url=AD_URL))
+    markup.add(InlineKeyboardButton("🔗 1. تابعنا على إنستغرام (@mah__asw)", url=INSTAGRAM_URL))
+    markup.add(InlineKeyboardButton("✅ 2. تم الاشتراك، متابعة", callback_data="done_insta"))
     
     bot.send_message(
         message.chat.id,
-        "مرحباً بك في بوت تحميل الفيديوهات الشامل! 🚀\n\nيدعم البوت التحميل من **يوتيوب، إنستغرام، تيك توك، فيسبوك، تويتر** وجميع المنصات.\n\nللبدء، يمكنك متابعتنا على الإنستغرام، ثم الضغط على زر الإعلان أدناه لإرسال رابط الفيديو مباشرة:",
+        "مرحباً بك في بوت تحميل الفيديوهات الشامل! 🚀\n\nيدعم البوت التحميل من **يوتيوب، إنستغرام، تيك توك، فيسبوك، تويتر** وجميع المنصات.\n\nللبدء، يرجى متابعة حسابنا الإجباري على الإنستغرام أولاً ثم الضغط على زر التأكيد أدناه:",
         reply_markup=markup
+    )
+
+@bot.callback_query_handler(func=lambda call: call.data == "done_insta")
+def after_instagram(call):
+    user_id = call.from_user.id
+    user_ad_status[user_id] = False
+    
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان لفتح التحميل", callback_data="click_ad"))
+    
+    bot.edit_message_text(
+        "ممتاز! تم تأكيد الإنستغرام بنجاح ✅\n\nالآن لتحميل أي فيديو من أي منصة، يجب عليك الضغط على زر الإعلان أدناه أولاً:",
+        call.message.chat.id,
+        call.message.message_id,
+        reply_markup=markup
+    )
+
+@bot.callback_query_handler(func=lambda call: call.data == "click_ad")
+def handle_ad_click(call):
+    user_id = call.from_user.id
+    user_ad_status[user_id] = True
+    bot.answer_callback_query(call.id, url=AD_URL)
+    
+    bot.send_message(
+        call.message.chat.id,
+        "✅ شكراً لك! تم تفعيل إذن التحميل. أرسل رابط الفيديو (من يوتيوب، تيك توك، إنستغرام، فيسبوك...) وسأقوم بتحميله فوراً:"
     )
 
 @bot.message_handler(func=lambda message: True)
 def handle_download(message):
     user_id = message.from_user.id
-    save_user(user_id)
+    save_user(user_id)  # تسجيل المستخدم عند إرسال أي رابط أو رسالة
     text = message.text.strip()
     
     if text.startswith('http'):
-        msg = bot.reply_to(message, "⏳ جاري تحميل الفيديو من المنصة المطلوبة، يرجى الانتظار...")
+        # التحقق الحاسم: هل ضغط المستخدم على زر الإعلان؟
+        if not user_ad_status.get(user_id, False):
+            markup = InlineKeyboardMarkup()
+            markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان أولاً", callback_data="click_ad"))
+            
+            bot.reply_to(
+                message,
+                "⚠️ عذراً! لا يمكنك تحميل الفيديو حتى تضغط على زر الإعلان أدناه أولاً:",
+                reply_markup=markup
+            )
+            return
+
+        # إبطال الإذن فوراً لكي يضطر لضغط الإعلان في الفيديو القادم
+        user_ad_status[user_id] = False
+
+        msg = bot.reply_to(message, "⏳ جاري تحميل الفيديو، يرجى الانتظار...")
         try:
             ydl_opts = {
                 'outtmpl': 'downloaded_video.mp4',
@@ -67,13 +114,13 @@ def handle_download(message):
                     bot.send_video(message.chat.id, vid)
                 bot.delete_message(message.chat.id, msg.message_id)
 
+            # إرسال زر الإعلان فقط لتحميل الفيديو القادم
             markup = InlineKeyboardMarkup()
-            markup.add(InlineKeyboardButton("🔗 تابعنا على إنستغرام", url=INSTAGRAM_URL))
-            markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان لتحميل فيديو آخر", url=AD_URL))
+            markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان لتحميل فيديو آخر", callback_data="click_ad"))
             
             bot.send_message(
                 message.chat.id,
-                "💡 لتحميل فيديو آخر، اضغط على زر الإعلان ثم أرسل الرابط:",
+                "💡 لتحميل فيديو آخر، اضغط على زر الإعلان أدناه أولاً ثم أرسل الرابط:",
                 reply_markup=markup
             )
 
