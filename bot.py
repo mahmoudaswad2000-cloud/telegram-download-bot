@@ -1,11 +1,12 @@
 import os
 import time
+import threading
 import telebot
 import yt_dlp
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 TOKEN = "8823255880:AAF93L25L5u5EX69Z8vF0xETIQMGV7vZedA"
-bot = telebot.TeleBot(TOKEN)
+bot = telebot.TeleBot(TOKEN, threaded=True)
 
 INSTAGRAM_URL = "https://www.instagram.com/mah__asw"
 AD_URL = "https://uplcm.com/4/11968073"
@@ -17,7 +18,8 @@ def get_user_state(user_id):
     if user_id not in user_states:
         user_states[user_id] = {
             'authorized': False,
-            'remaining': AD_WAIT_SECONDS
+            'remaining': AD_WAIT_SECONDS,
+            'is_counting': False
         }
     return user_states[user_id]
 
@@ -48,6 +50,8 @@ def send_welcome(message):
     
     state = get_user_state(user_id)
     state['authorized'] = False
+    state['is_counting'] = False
+    state['remaining'] = AD_WAIT_SECONDS
     
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("🔗 1. تابعنا على إنستغرام (@mah__asw)", url=INSTAGRAM_URL))
@@ -64,6 +68,7 @@ def after_instagram(call):
     user_id = call.from_user.id
     state = get_user_state(user_id)
     state['authorized'] = False
+    state['is_counting'] = False
     state['remaining'] = AD_WAIT_SECONDS
     
     markup = InlineKeyboardMarkup()
@@ -76,26 +81,19 @@ def after_instagram(call):
         reply_markup=markup
     )
 
-@bot.callback_query_handler(func=lambda call: call.data == "single_ad_click")
-def handle_single_ad_click(call):
-    user_id = call.from_user.id
+def run_countdown(chat_id, message_id, user_id):
     state = get_user_state(user_id)
+    state['is_counting'] = True
+    state['remaining'] = AD_WAIT_SECONDS
 
-    # 1. فتح رابط الإعلان في المتصفح فوراً للمستخدم
-    bot.answer_callback_query(call.id, url=AD_URL)
-
-    if state['remaining'] <= 0:
-        state['remaining'] = AD_WAIT_SECONDS
-
-    # 2. تحويل نفس الزر ليتحدث بالعداد التنازلي
     while state['remaining'] > 0:
         rem = state['remaining']
         markup = InlineKeyboardMarkup()
         markup.add(InlineKeyboardButton(f"⏳ يرجى الانتظار في الإعلان ({rem} ثوانٍ)...", callback_data="waiting"))
         try:
             bot.edit_message_reply_markup(
-                call.message.chat.id,
-                call.message.message_id,
+                chat_id,
+                message_id,
                 reply_markup=markup
             )
         except Exception:
@@ -104,18 +102,31 @@ def handle_single_ad_click(call):
         time.sleep(1)
         state['remaining'] -= 1
 
-    # 3. تغيير نفس الزر بعد اكتمال العداد لمنح الإذن
     state['authorized'] = True
+    state['is_counting'] = False
+    
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("✅ تم التفعيل بنجاح! أرسل رابط الفيديو الآن", callback_data="verified"))
     try:
         bot.edit_message_reply_markup(
-            call.message.chat.id,
-            call.message.message_id,
+            chat_id,
+            message_id,
             reply_markup=markup
         )
     except Exception:
         pass
+
+@bot.callback_query_handler(func=lambda call: call.data == "single_ad_click")
+def handle_single_ad_click(call):
+    user_id = call.from_user.id
+    state = get_user_state(user_id)
+
+    # 1. إعطاء إشعار فتح الإعلان للمستخدم
+    bot.answer_callback_query(call.id, url=AD_URL)
+
+    # 2. بدء العداد في خيط منفصل لمنع تجميد السيرفر
+    if not state.get('is_counting', False):
+        threading.Thread(target=run_countdown, args=(call.message.chat.id, call.message.message_id, user_id)).start()
 
 @bot.callback_query_handler(func=lambda call: call.data in ["waiting", "verified"])
 def handle_passive_clicks(call):
@@ -144,6 +155,7 @@ def handle_download(message):
         # إعادة ضبط الحالة للمرة القادمة
         state['authorized'] = False
         state['remaining'] = AD_WAIT_SECONDS
+        state['is_counting'] = False
 
         msg = bot.reply_to(message, "⏳ جاري تحميل الفيديو، يرجى الانتظار...")
         try:
