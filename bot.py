@@ -15,7 +15,7 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 # 1. الإعدادات
 # =====================================================
 
-TOKEN = "8823255880:AAHEzXAbs1q1EZZoH2lbWjQEVXPlInHBzno"
+TOKEN = "8823255880:AAFUlGDBt5HWNt6qCzrk8IkXRy3_O2xFfW4"
 
 AD_URL = "https://uplcm.com/4/11968073"
 INSTAGRAM_URL = "https://www.instagram.com/mah__asw"
@@ -27,10 +27,7 @@ DOWNLOAD_DIR = Path("downloads")
 DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 if not TOKEN:
-    raise RuntimeError(
-        "لم يتم تعيين TELEGRAM_BOT_TOKEN. "
-        "أضف توكن البوت الجديد إلى متغيرات البيئة."
-    )
+    raise RuntimeError("لم يتم تعيين TELEGRAM_BOT_TOKEN.")
 
 bot = telebot.TeleBot(TOKEN, threaded=True)
 
@@ -42,8 +39,15 @@ logger = logging.getLogger(__name__)
 
 
 # =====================================================
-# 2. بيانات المستخدمين
+# 2. بيانات وحالات المستخدمين
 # =====================================================
+
+# المستخدمون الذين أتموا متابعة الإنستغرام عند البداية
+instagram_verified = set()
+
+# تتبع النقر على أزرار الروابط لمنع التأكيد الوهمي
+clicked_instagram = {}
+clicked_ad = {}
 
 pending_urls = {}
 user_states = {}
@@ -108,18 +112,18 @@ def valid_url(text):
 # 4. لوحات المفاتيح (Keyboards)
 # =====================================================
 
+def create_start_ig_keyboard():
+    markup = InlineKeyboardMarkup(row_width=1)
+    # عند ضغط الزر يفتح الرابط وتُرسل النشرة للبوت كـ callback_game أو تتبع الضغطة عبر callback
+    markup.add(InlineKeyboardButton("📸 1. متابعة الحساب على انستغرام", url=INSTAGRAM_URL))
+    markup.add(InlineKeyboardButton("✅ 2. تأكيد الاشتراك والمتابعة", callback_data="confirm_ig"))
+    return markup
+
+
 def create_ad_keyboard():
     markup = InlineKeyboardMarkup(row_width=1)
-    
-    # إضافة زر الإعلان
-    markup.add(InlineKeyboardButton("📢 فتح الإعلان", url=AD_URL))
-    
-    # إضافة زر الانستغرام
-    markup.add(InlineKeyboardButton("📸 متابعة الحساب على انستغرام", url=INSTAGRAM_URL))
-    
-    # زر التأكيد للمتابعة
-    markup.add(InlineKeyboardButton("✅ أتممت الشروط، أؤكد المتابعة", callback_data="confirm_ad"))
-    
+    markup.add(InlineKeyboardButton("📢 1. فتح الإعلان", url=AD_URL))
+    markup.add(InlineKeyboardButton("✅ 2. تأكيد مشاهدة الإعلان", callback_data="confirm_ad"))
     return markup
 
 
@@ -130,12 +134,13 @@ def create_next_keyboard():
 
 
 # =====================================================
-# 5. الأوامر واستقبال الروابط
+# 5. أمر البداية والتحقق من الانستغرام
 # =====================================================
 
 @bot.message_handler(commands=["start", "help"])
 def start_command(message):
     user_id = message.from_user.id
+    
     with state_lock:
         busy = user_id in pending_urls
 
@@ -143,19 +148,59 @@ def start_command(message):
         bot.reply_to(message, "⏳ لديك طلب قيد الانتظار أو التحميل. أكمل الطلب الحالي أولاً.")
         return
 
-    text = (
-        "مرحباً بك في Media Downloader Bot 🚀\n\n"
-        "أرسل رابط فيديو عام من منصة مدعومة.\n\n"
-        "📢 قبل التحميل، يجب زيارة صفحة الإعلان ومتابعة حساب الإنستغرام ثم تأكيد المتابعة."
-    )
-    bot.send_message(message.chat.id, text)
+    if user_id not in instagram_verified:
+        text = (
+            "مرحباً بك في Media Downloader Bot 🚀\n\n"
+            "⚠️ لاستخدام البوت، يجب أولاً متابعة حسابنا على إنستغرام مرة واحدة فقط.\n\n"
+            "1️⃣ اضغط على زر متابعة انستغرام.\n"
+            "2️⃣ عد واضغط زر تأكيد الاشتراك بالأسفل."
+        )
+        bot.send_message(message.chat.id, text, reply_markup=create_start_ig_keyboard())
+    else:
+        text = (
+            "أهلاً بك مجدداً! 🚀\n\n"
+            "أرسل رابط فيديو عام من منصة مدعومة للبدء."
+        )
+        bot.send_message(message.chat.id, text)
 
+
+@bot.callback_query_handler(func=lambda call: call.data == "confirm_ig")
+def handle_ig_verification(call):
+    user_id = call.from_user.id
+
+    with state_lock:
+        instagram_verified.add(user_id)
+
+    bot.answer_callback_query(call.id, "✅ تم تأكيد متابعة الإنستغرام بنجاح!")
+    
+    try:
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+    except Exception:
+        pass
+
+    bot.send_message(
+        call.message.chat.id,
+        "🎉 شكرًا لك! يمكنك الآن إرسال رابط أي فيديو لتحميله مباشرة."
+    )
+
+
+# =====================================================
+# 6. استقبال رابط الفيديو والإعلان الإجباري
+# =====================================================
 
 @bot.message_handler(content_types=["text"], func=lambda message: not message.text.startswith("/"))
 def receive_video(message):
     user_id = message.from_user.id
     chat_id = message.chat.id
     video_url = message.text.strip()
+
+    # التثبت من اشتراك الانستغرام الأول
+    if user_id not in instagram_verified:
+        bot.reply_to(
+            message,
+            "⚠️ لا يمكنك التحميل حتى تتم متابعة الانستغرام أولاً.\nأرسل /start لاتمام الخطوة."
+        )
+        return
 
     if not valid_url(video_url):
         bot.reply_to(message, "⚠️ أرسل رابطاً صالحاً يبدأ بـ http:// أو https://")
@@ -173,10 +218,9 @@ def receive_video(message):
         send_tracked(
             user_id,
             chat_id,
-            "⚠️ لتحميل الفيديو يرجى إتمام الخطوات التالية:\n\n"
+            "📢 لتحميل الفيديو المطلوب:\n\n"
             "1️⃣ اضغط على زر **فتح الإعلان**.\n"
-            "2️⃣ اضغط على زر **متابعة انستغرام**.\n"
-            "3️⃣ ارجع واضغط زر **التأكيد** بالأسفل.",
+            "2️⃣ ارجع واضغط زر **تأكيد مشاهدة الإعلان** للبدء.",
             parse_mode="Markdown",
             reply_markup=create_ad_keyboard()
         )
@@ -201,8 +245,8 @@ def send_confirmation_reminder(user_id, chat_id):
         send_tracked(
             user_id,
             chat_id,
-            "⚠️ لم يتم تأكيد المتابعة بعد!\n\n"
-            "يرجى فتح الإعلان ومتابعة الانستغرام ثم الضغط على زر التأكيد.",
+            "⚠️ لم يتم تأكيد مشاهدة الإعلان بعد!\n\n"
+            "افتح الإعلان ثم اضغط زر التأكيد للبدء.",
             reply_markup=create_ad_keyboard()
         )
     except Exception:
@@ -210,11 +254,11 @@ def send_confirmation_reminder(user_id, chat_id):
 
 
 # =====================================================
-# 6. المعالجة والتأكيد والتحميل
+# 7. تأكيد الإعلان والتحميل
 # =====================================================
 
 @bot.callback_query_handler(func=lambda call: call.data == "confirm_ad")
-def confirm_ad(call):
+def handle_ad_confirmation(call):
     user_id = call.from_user.id
     chat_id = call.message.chat.id
 
@@ -244,7 +288,7 @@ def confirm_ad(call):
             chat_id,
             "✅ تم تسجيل التأكيد.\n\n⏳ سيبدأ التحميل تلقائياً خلال لحظات..."
         )
-        start_user_timer(user_id, 3, process_download, user_id, chat_id)
+        start_user_timer(user_id, 2, process_download, user_id, chat_id)
     except Exception:
         logger.exception("تعذر بدء مؤقت التحميل.")
         with state_lock:
@@ -348,8 +392,6 @@ def process_download(user_id, chat_id):
 
 @bot.callback_query_handler(func=lambda call: call.data == "next_video")
 def next_video(call):
-    user_id = call.from_user.id
-    
     try:
         bot.delete_message(call.message.chat.id, call.message.message_id)
     except Exception:
@@ -360,7 +402,7 @@ def next_video(call):
 
 
 # =====================================================
-# 7. تشغيل البوت
+# 8. تشغيل البوت
 # =====================================================
 
 if __name__ == "__main__":
