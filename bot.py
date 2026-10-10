@@ -3,15 +3,12 @@ import telebot
 import yt_dlp
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-# التوكن المحدث
 TOKEN = "8823255880:AAHEzXAbs1q1EZZoH2lbWjQEVXPlInHBzno"
 bot = telebot.TeleBot(TOKEN)
 
-# الروابط المعتمدة
 INSTAGRAM_URL = "https://www.instagram.com/mah__asw?psln=bHVtbTd0NGVkaWh2"
 AD_URL = "https://uplcm.com/4/11968073"
 
-# تتبع حالة الإعلان لضمان مشاهدته لكل فيديو
 user_ad_status = {}
 
 def save_user(user_id):
@@ -39,7 +36,7 @@ def show_stats(message):
 def send_welcome(message):
     user_id = message.from_user.id
     save_user(user_id)
-    user_ad_status[user_id] = False  # إعادة القفل عند البدء
+    user_ad_status[user_id] = False 
     
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("🔗 1. تابعنا على إنستغرام (@mah__asw)", url=INSTAGRAM_URL))
@@ -54,7 +51,7 @@ def send_welcome(message):
 @bot.callback_query_handler(func=lambda call: call.data == "done_insta")
 def after_instagram(call):
     user_id = call.from_user.id
-    user_ad_status[user_id] = False  # إبقاء الإذن مغلقاً حتى يتم الضغط على الإعلان
+    user_ad_status[user_id] = False
     
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان لفتح التحميل", url=AD_URL))
@@ -73,11 +70,8 @@ def handle_download(message):
     text = message.text.strip()
     
     if text.startswith('http'):
-        # إذا لم يشاهد الإعلان أو انقضت صلاحيته للطلب الجديد
         if not user_ad_status.get(user_id, False):
-            # إعطاء الإذن للمرة القادمة بمجرد ظهور زر الإعلان المباشر وفتحه
             user_ad_status[user_id] = True
-            
             markup = InlineKeyboardMarkup()
             markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان أولاً", url=AD_URL))
             
@@ -88,7 +82,6 @@ def handle_download(message):
             )
             return
 
-        # تصفير الإذن فوراً للفيديو القادم قبل البدء بالتحميل
         user_ad_status[user_id] = False
 
         file_name = f"video_{user_id}.mp4"
@@ -98,6 +91,9 @@ def handle_download(message):
                 'outtmpl': file_name,
                 'format': 'best/bestvideo+bestaudio/best',
                 'max_filesize': 50 * 1024 * 1024,
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                },
             }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([text])
@@ -107,7 +103,6 @@ def handle_download(message):
                     bot.send_video(message.chat.id, vid)
                 bot.delete_message(message.chat.id, msg.message_id)
 
-            # إظهار زر الإعلان المباشر لإلزام مشاهدته قبل تحميل الفيديو القادم
             markup = InlineKeyboardMarkup()
             markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان لتحميل فيديو آخر", url=AD_URL))
             
@@ -118,8 +113,8 @@ def handle_download(message):
             )
 
         except Exception as e:
-            user_ad_status[user_id] = True  # إرجاع الصلاحية في حال فشل التحميل
-            bot.edit_message_text(f"❌ حدث خطأ أثناء التحميل: تأكد من أن الرابط صالح وعام.\nالتفاصيل: {str(e)}", message.chat.id, msg.message_id)
+            user_ad_status[user_id] = True
+            bot.edit_message_text("❌ متعذر التحميل حالياً من هذا الرابط بسبب قيود المنصة (تأكد من أن الحساب عام وغير خاص).", message.chat.id, msg.message_id)
         finally:
             if os.path.exists(file_name):
                 os.remove(file_name)
