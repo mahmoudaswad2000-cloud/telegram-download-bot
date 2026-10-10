@@ -45,12 +45,35 @@ def after_instagram(call):
 @bot.callback_query_handler(func=lambda call: call.data == "click_ad")
 def handle_ad_click(call):
     user_id = call.from_user.id
+
+    # تسجيل الضغط على زر الإعلان
     user_ad_status[user_id] = True
-    bot.answer_callback_query(call.id, url=AD_URL)
-    
+
+    # إيقاف علامة الانتظار في تيليغرام
+    bot.answer_callback_query(
+        call.id,
+        text="تم تسجيل الضغط على زر الإعلان"
+    )
+
+    # إرسال زر يفتح الإعلان مباشرة
+    markup = InlineKeyboardMarkup()
+    markup.add(
+        InlineKeyboardButton(
+            "📢 فتح الإعلان الآن",
+            url=AD_URL
+        )
+    )
+
     bot.send_message(
         call.message.chat.id,
-        "✅ شكراً لك! تم تفعيل إذن التحميل. أرسل رابط الفيديو (من يوتيوب، تيك توك، إنستغرام، فيسبوك...) وسأقوم بتحميله فوراً:"
+        "اضغط على الزر التالي لفتح صفحة الإعلان:",
+        reply_markup=markup
+    )
+
+    # توضيح أن الضغط وحده لا يثبت مشاهدة الإعلان
+    bot.send_message(
+        call.message.chat.id,
+        "بعد فتح الإعلان، ارجع إلى البوت وأرسل رابط الفيديو."
     )
 
 @bot.message_handler(func=lambda message: True)
