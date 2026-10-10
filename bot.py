@@ -42,12 +42,7 @@ logger = logging.getLogger(__name__)
 # 2. بيانات وحالات المستخدمين
 # =====================================================
 
-# المستخدمون الذين أتموا متابعة الإنستغرام عند البداية
 instagram_verified = set()
-
-# تتبع النقر على أزرار الروابط لمنع التأكيد الوهمي
-clicked_instagram = {}
-clicked_ad = {}
 
 pending_urls = {}
 user_states = {}
@@ -114,7 +109,6 @@ def valid_url(text):
 
 def create_start_ig_keyboard():
     markup = InlineKeyboardMarkup(row_width=1)
-    # عند ضغط الزر يفتح الرابط وتُرسل النشرة للبوت كـ callback_game أو تتبع الضغطة عبر callback
     markup.add(InlineKeyboardButton("📸 1. متابعة الحساب على انستغرام", url=INSTAGRAM_URL))
     markup.add(InlineKeyboardButton("✅ 2. تأكيد الاشتراك والمتابعة", callback_data="confirm_ig"))
     return markup
@@ -148,20 +142,13 @@ def start_command(message):
         bot.reply_to(message, "⏳ لديك طلب قيد الانتظار أو التحميل. أكمل الطلب الحالي أولاً.")
         return
 
-    if user_id not in instagram_verified:
-        text = (
-            "مرحباً بك في Media Downloader Bot 🚀\n\n"
-            "⚠️ لاستخدام البوت، يجب أولاً متابعة حسابنا على إنستغرام مرة واحدة فقط.\n\n"
-            "1️⃣ اضغط على زر متابعة انستغرام.\n"
-            "2️⃣ عد واضغط زر تأكيد الاشتراك بالأسفل."
-        )
-        bot.send_message(message.chat.id, text, reply_markup=create_start_ig_keyboard())
-    else:
-        text = (
-            "أهلاً بك مجدداً! 🚀\n\n"
-            "أرسل رابط فيديو عام من منصة مدعومة للبدء."
-        )
-        bot.send_message(message.chat.id, text)
+    text = (
+        "مرحباً بك في Media Downloader Bot 🚀\n\n"
+        "⚠️ لاستخدام البوت، يجب أولاً متابعة حسابنا على إنستغرام.\n\n"
+        "1️⃣ اضغط على زر متابعة انستغرام.\n"
+        "2️⃣ اضغط زر تأكيد الاشتراك بالأسفل للبدء."
+    )
+    bot.send_message(message.chat.id, text, reply_markup=create_start_ig_keyboard())
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "confirm_ig")
@@ -194,11 +181,10 @@ def receive_video(message):
     chat_id = message.chat.id
     video_url = message.text.strip()
 
-    # التثبت من اشتراك الانستغرام الأول
     if user_id not in instagram_verified:
         bot.reply_to(
             message,
-            "⚠️ لا يمكنك التحميل حتى تتم متابعة الانستغرام أولاً.\nأرسل /start لاتمام الخطوة."
+            "⚠️ لا يمكنك التحميل حتى تتم متابعة الانستغرام أولاً.\nأرسل /start لإتمام الخطوة."
         )
         return
 
