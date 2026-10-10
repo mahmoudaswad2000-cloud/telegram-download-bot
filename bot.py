@@ -72,11 +72,12 @@ def verify_insta(call):
     
     tracker['checked_insta'] = True
     
+    # فتح الإعلان في متصفح تيليغرام الداخلي بمجرد الضغط عليه
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان بمتصفح خارجي", callback_data="open_external_ad"))
+    markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان بمتصفح تيليغرام", callback_data="open_app_ad"))
     
     bot.edit_message_text(
-        "ممتاز! تم تأكيد المتابعة بنجاح ✅\n\nالآن لتحميل أي فيديو، اضغط على زر الإعلان أدناه وسيتم تفعيل التحميل تلقائياً بعد 10 ثوانٍ:",
+        "ممتاز! تم تأكيد المتابعة بنجاح ✅\n\nالآن لتحميل أي فيديو، اضغط على زر الإعلان أدناه لفتحه في متصفح تيليغرام، وسيتم التفعيل تلقائياً بعد 10 ثوانٍ:",
         call.message.chat.id,
         call.message.message_id,
         reply_markup=markup
@@ -87,40 +88,38 @@ def auto_enable_download(chat_id, user_id):
     tracker['is_counting'] = True
     tracker['can_download'] = False
     
-    # الانتظار لمدة 10 ثوانٍ
+    # العداد لمدة 10 ثوانٍ
     time.sleep(AD_WAIT_SECONDS)
     
-    # التفعيل التلقائي
     tracker['is_counting'] = False
     tracker['can_download'] = True
     
-    # إشعار المستخدم بالتفعيل التلقائي
     try:
         bot.send_message(
             chat_id,
-            "✅ **تم اكتشافه واكتمال الـ 10 ثوانٍ بنجاح!**\nتم فتح إذن التحميل تلقائياً 🎉\n\nأرسل رابط الفيديو الآن وسأقوم بتحميله فوراً:"
+            "✅ **اكتملت الـ 10 ثوانٍ بنجاح!**\nتم فتح إذن التحميل تلقائياً 🎉\n\nأرسل رابط الفيديو الآن وسأقوم بتحميله فوراً:"
         )
     except Exception:
         pass
 
-@bot.callback_query_handler(func=lambda call: call.data == "open_external_ad")
-def open_external_ad(call):
+@bot.callback_query_handler(func=lambda call: call.data == "open_app_ad")
+def open_app_ad(call):
     user_id = call.from_user.id
     chat_id = call.message.chat.id
     tracker = get_user_tracker(user_id)
     
     tracker['clicked_ad'] = True
     
-    # 1. فتح رابط الإعلان في المتصفح الخارجي فوراً
+    # فتح الرابط في متصفح تيليغرام الداخلي
     bot.answer_callback_query(call.id, url=AD_URL)
     
-    # 2. بدء العداد التلقائي للتفعيل في الخلفية
+    # بدء العداد التلقائي بالخلفية
     if not tracker.get('is_counting', False):
         threading.Thread(target=auto_enable_download, args=(chat_id, user_id)).start()
     
     bot.send_message(
         chat_id,
-        "🌐 **تم فتح الإعلان في المتصفح الخارجي!**\nجاري العد التنازلي (10 ثوانٍ)... سيتم تفعيل التحميل لك **تلقائياً** فور انتهائها دون الحاجة للضغط على أي زر."
+        "📱 **تم فتح الإعلان بمتصفح تيليغرام الداخلي!**\nيرجى الانتظار (10 ثوانٍ) في الإعلان... وسيتم تفعيل التحميل تلقائياً دون أي اضطرار للضغط على زر آخر."
     )
 
 @bot.message_handler(func=lambda message: True)
@@ -131,7 +130,7 @@ def handle_download(message):
     tracker = get_user_tracker(user_id)
 
     if text.startswith('http'):
-        # 1. التحقق من متابعة الإنستغرام
+        # 1. التحقق من الإنستغرام
         if not tracker.get('checked_insta', False):
             markup = InlineKeyboardMarkup()
             markup.add(InlineKeyboardButton("🔗 اضغط هنا لفتح رابط الإنستغرام", url=INSTAGRAM_URL))
@@ -139,37 +138,37 @@ def handle_download(message):
             bot.reply_to(message, "⚠️ يرجى متابعة حسابنا على الإنستغرام أولاً:", reply_markup=markup)
             return
 
-        # 2. إذا لم يفتح الإعلان نهائياً
+        # 2. إذا لم يفتح الإعلان
         if not tracker.get('clicked_ad', False):
             markup = InlineKeyboardMarkup()
-            markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان بمتصفح خارجي", callback_data="open_external_ad"))
+            markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان بمتصفح تيليغرام", callback_data="open_app_ad"))
             bot.reply_to(
                 message,
-                "⚠️ **عذراً! يجب عليك فتح رابط الإعلان بمتصفح خارجي أولاً.**\nاضغط على الزر أدناه وانتظر التفعيل التلقائي:",
+                "⚠️ **عذراً! يجب عليك فتح رابط الإعلان أولاً.**\nاضغط على الزر أدناه وانتظر التفعيل التلقائي:",
                 reply_markup=markup
             )
             return
 
-        # 3. إذا أرسل الرابط أثناء العد التنازلي وقبل انتهاء الـ 10 ثوانٍ
+        # 3. أثناء الـ 10 ثوانٍ
         if tracker.get('is_counting', False):
             bot.reply_to(
                 message,
-                "⏳ **يرجى الانتظار!**\nالعد التنازلي جاري حالياً (10 ثوانٍ)، وسنقوم بتفعيل التحميل لك تلقائياً خلال لحظات..."
+                "⏳ **يرجى الانتظار!**\nجاري العد التنازلي (10 ثوانٍ) في متصفح تيليغرام، وسنفعل لك التحميل تلقائياً خلال لحظات..."
             )
             return
 
-        # 4. إذا لم يكتمل التفعيل لأي سبب
+        # 4. إن لم يكتمل التفعيل
         if not tracker.get('can_download', False):
             markup = InlineKeyboardMarkup()
-            markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان بمتصفح خارجي", callback_data="open_external_ad"))
+            markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان بمتصفح تيليغرام", callback_data="open_app_ad"))
             bot.reply_to(
                 message,
-                "⚠️ **عذراً!** اضغط على زر الإعلان بمتصفح خارجي وانتظر 10 ثوانٍ للتفعيل التلقائي:",
+                "⚠️ **عذراً!** اضغط على زر الإعلان وانتظر 10 ثوانٍ للتفعيل التلقائي:",
                 reply_markup=markup
             )
             return
 
-        # تصفير الإذن للفيديو التالي (طلب إعلان جديد لكل فيديو)
+        # إعادة الضبط للفيديو القادم
         tracker['can_download'] = False
         tracker['clicked_ad'] = False
 
@@ -189,11 +188,11 @@ def handle_download(message):
                 bot.delete_message(message.chat.id, msg.message_id)
 
             markup = InlineKeyboardMarkup()
-            markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان بمتصفح خارجي لتحميل فيديو آخر", callback_data="open_external_ad"))
+            markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان لتحميل فيديو آخر", callback_data="open_app_ad"))
             
             bot.send_message(
                 message.chat.id,
-                "💡 لتحميل فيديو آخر، اضغط على زر الإعلان وانتظر 10 ثوانٍ ليتم التفعيل تلقائياً ثم أرسل الرابط:",
+                "💡 لتحميل فيديو آخر، اضغط على زر الإعلان وانتظر 10 ثوانٍ للتفعيل التلقائي ثم أرسل الرابط:",
                 reply_markup=markup
             )
 
