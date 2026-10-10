@@ -26,9 +26,6 @@ MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
 DOWNLOAD_DIR = Path("downloads")
 DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-if not TOKEN:
-    raise RuntimeError("لم يتم تعيين TELEGRAM_BOT_TOKEN.")
-
 bot = telebot.TeleBot(TOKEN, threaded=True)
 
 logging.basicConfig(
@@ -43,7 +40,6 @@ logger = logging.getLogger(__name__)
 # =====================================================
 
 instagram_verified = set()
-
 pending_urls = {}
 user_states = {}
 ad_messages = {}
@@ -128,19 +124,12 @@ def create_next_keyboard():
 
 
 # =====================================================
-# 5. أمر البداية والتحقق من الانستغرام
+# 5. الأوامر والتأكيد الأول
 # =====================================================
 
 @bot.message_handler(commands=["start", "help"])
 def start_command(message):
     user_id = message.from_user.id
-    
-    with state_lock:
-        busy = user_id in pending_urls
-
-    if busy:
-        bot.reply_to(message, "⏳ لديك طلب قيد الانتظار أو التحميل. أكمل الطلب الحالي أولاً.")
-        return
 
     text = (
         "مرحباً بك في Media Downloader Bot 🚀\n\n"
@@ -172,7 +161,7 @@ def handle_ig_verification(call):
 
 
 # =====================================================
-# 6. استقبال رابط الفيديو والإعلان الإجباري
+# 6. استقبال روابط الفيديو
 # =====================================================
 
 @bot.message_handler(content_types=["text"], func=lambda message: not message.text.startswith("/"))
@@ -240,7 +229,7 @@ def send_confirmation_reminder(user_id, chat_id):
 
 
 # =====================================================
-# 7. تأكيد الإعلان والتحميل
+# 7. معالجة الإعلان والتنزيل
 # =====================================================
 
 @bot.callback_query_handler(func=lambda call: call.data == "confirm_ad")
@@ -402,4 +391,4 @@ if __name__ == "__main__":
         except Exception:
             logger.exception("انقطع الاتصال. إعادة المحاولة بعد 5 ثوانٍ...")
             time.sleep(5)
-            
+    
