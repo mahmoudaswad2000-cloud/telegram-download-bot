@@ -6,7 +6,8 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 TOKEN = "8823255880:AAF93L25L5u5EX69Z8vF0xETIQMGV7vZedA"
 bot = telebot.TeleBot(TOKEN)
 
-INSTAGRAM_URL = "https://www.instagram.com/mah__asw"
+# الروابط المحدثة
+INSTAGRAM_URL = "https://www.instagram.com/mah__asw?psln=bHVtbTd0NGVkaWh2"
 AD_URL = "https://uplcm.com/4/11968073"
 
 # قاموس لتتبع النقرات الحقيقية لكل مستخدم
@@ -62,14 +63,14 @@ def send_welcome(message):
         reply_markup=markup
     )
 
-# 1. تسجيل الضغطة الحقيقية على رابط الإنستغرام
+# 1. تسجيل الضغطة الحقيقية على رابط الإنستغرام الجديد
 @bot.callback_query_handler(func=lambda call: call.data == "click_insta_link")
 def handle_insta_link_click(call):
     user_id = call.from_user.id
     tracker = get_user_tracker(user_id)
     tracker['clicked_insta'] = True  # تفعيل شرط الإنستغرام
     
-    # فتح رابط الإنستغرام فوراً في المتصفح
+    # فتح رابط الإنستغرام الجديد فوراً في المتصفح
     bot.answer_callback_query(call.id, url=INSTAGRAM_URL)
 
 # 2. التحقق من الضغط الفعلي على الإنستغرام
@@ -191,4 +192,4 @@ def handle_download(message):
         bot.reply_to(message, "الرجاء إرسال رابط فيديو صالح يبدأ بـ http أو إرسال /start للبدء.")
 
 bot.infinity_polling()
-            
+                    
