@@ -1,394 +1,143 @@
 import os
-import time
-import uuid
-import logging
-import threading
-from pathlib import Path
-from urllib.parse import urlparse
-
 import telebot
 import yt_dlp
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
+# التوكن الجديد المحدث
+TOKEN = "8823255880:AAHEzXAbs1q1EZZoH2lbWjQEVXPlInHBzno"
+bot = telebot.TeleBot(TOKEN)
 
-# =====================================================
-# 1. الإعدادات
-# =====================================================
-
-TOKEN = "8823255880:AAFUlGDBt5HWNt6qCzrk8IkXRy3_O2xFfW4"
-
+# الروابط المعتمدة
+INSTAGRAM_URL = "https://www.instagram.com/mah__asw?psln=bHVtbTd0NGVkaWh2"
 AD_URL = "https://uplcm.com/4/11968073"
-INSTAGRAM_URL = "https://www.instagram.com/mah__asw"
 
-WAIT_SECONDS = 10
-MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
+# تتبع حالة مشاهدة الإعلان لكل مستخدم
+user_ad_status = {}
 
-DOWNLOAD_DIR = Path("downloads")
-DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
-bot = telebot.TeleBot(TOKEN, threaded=True)
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s"
-)
-logger = logging.getLogger(__name__)
-
-
-# =====================================================
-# 2. بيانات وحالات المستخدمين
-# =====================================================
-
-instagram_verified = set()
-pending_urls = {}
-user_states = {}
-ad_messages = {}
-user_timers = {}
-state_lock = threading.RLock()
-
-
-# =====================================================
-# 3. إدارة الرسائل والمؤقتات
-# =====================================================
-
-def remember_message(user_id, message):
-    with state_lock:
-        ad_messages.setdefault(user_id, []).append(
-            (message.chat.id, message.message_id)
-        )
-
-
-def send_tracked(user_id, chat_id, text, **kwargs):
-    message = bot.send_message(chat_id, text, **kwargs)
-    remember_message(user_id, message)
-    return message
-
-
-def delete_ad_messages(user_id):
-    with state_lock:
-        messages = ad_messages.pop(user_id, [])
-
-    for chat_id, message_id in messages:
-        try:
-            bot.delete_message(chat_id, message_id)
-        except Exception as exc:
-            logger.info("تعذر حذف الرسالة %s: %s", message_id, exc)
-
-
-def cancel_user_timer(user_id):
-    with state_lock:
-        timer = user_timers.pop(user_id, None)
-    if timer:
-        timer.cancel()
-
-
-def start_user_timer(user_id, seconds, callback, *args):
-    cancel_user_timer(user_id)
-    timer = threading.Timer(seconds, callback, args=args)
-    timer.daemon = True
-    with state_lock:
-        user_timers[user_id] = timer
-    timer.start()
-
-
-def valid_url(text):
-    try:
-        parsed = urlparse(text.strip())
-        return parsed.scheme in ("http", "https") and bool(parsed.netloc)
-    except Exception:
-        return False
-
-
-# =====================================================
-# 4. لوحات المفاتيح (Keyboards)
-# =====================================================
-
-def create_start_ig_keyboard():
-    markup = InlineKeyboardMarkup(row_width=1)
-    markup.add(InlineKeyboardButton("📸 1. متابعة الحساب على انستغرام", url=INSTAGRAM_URL))
-    markup.add(InlineKeyboardButton("✅ 2. تأكيد الاشتراك والمتابعة", callback_data="confirm_ig"))
-    return markup
-
-
-def create_ad_keyboard():
-    markup = InlineKeyboardMarkup(row_width=1)
-    markup.add(InlineKeyboardButton("📢 1. فتح الإعلان", url=AD_URL))
-    markup.add(InlineKeyboardButton("✅ 2. تأكيد مشاهدة الإعلان", callback_data="confirm_ad"))
-    return markup
-
-
-def create_next_keyboard():
-    markup = InlineKeyboardMarkup(row_width=1)
-    markup.add(InlineKeyboardButton("📥 تحميل فيديو آخر", callback_data="next_video"))
-    return markup
-
-
-# =====================================================
-# 5. الأوامر والتأكيد الأول
-# =====================================================
-
-@bot.message_handler(commands=["start", "help"])
-def start_command(message):
-    user_id = message.from_user.id
-
-    text = (
-        "مرحباً بك في Media Downloader Bot 🚀\n\n"
-        "⚠️ لاستخدام البوت، يجب أولاً متابعة حسابنا على إنستغرام.\n\n"
-        "1️⃣ اضغط على زر متابعة انستغرام.\n"
-        "2️⃣ اضغط زر تأكيد الاشتراك بالأسفل للبدء."
-    )
-    bot.send_message(message.chat.id, text, reply_markup=create_start_ig_keyboard())
-
-
-@bot.callback_query_handler(func=lambda call: call.data == "confirm_ig")
-def handle_ig_verification(call):
-    user_id = call.from_user.id
-
-    with state_lock:
-        instagram_verified.add(user_id)
-
-    bot.answer_callback_query(call.id, "✅ تم تأكيد متابعة الإنستغرام بنجاح!")
+# دالة حفظ وتتبع المستخدمين
+def save_user(user_id):
+    users = set()
+    if os.path.exists('users.txt'):
+        with open('users.txt', 'r') as f:
+            users = set(line.strip() for line in f if line.strip())
     
-    try:
-        bot.delete_message(call.message.chat.id, call.message.message_id)
-    except Exception:
-        pass
+    if str(user_id) not in users:
+        with open('users.txt', 'a') as f:
+            f.write(f"{user_id}\n")
 
+def get_users_count():
+    if not os.path.exists('users.txt'):
+        return 0
+    with open('users.txt', 'r') as f:
+        return len(set(line.strip() for line in f if line.strip()))
+
+# أمر الإحصائيات
+@bot.message_handler(commands=['stats'])
+def show_stats(message):
+    count = get_users_count()
+    bot.reply_to(message, f"📊 **إحصائيات البوت:**\n\nعدد المستخدِمين الإجمالي: **{count}** مستخدم.")
+
+# أمر البدء وترحيب الإنستغرام
+@bot.message_handler(commands=['start', 'help'])
+def send_welcome(message):
+    user_id = message.from_user.id
+    save_user(user_id)
+    user_ad_status[user_id] = False 
+    
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("🔗 1. تابعنا على إنستغرام (@mah__asw)", url=INSTAGRAM_URL))
+    markup.add(InlineKeyboardButton("✅ 2. تم الاشتراك، متابعة", callback_data="done_insta"))
+    
+    bot.send_message(
+        message.chat.id,
+        "مرحباً بك في بوت تحميل الفيديوهات الشامل! 🚀\n\nيدعم البوت التحميل من جميع المنصات.\n\nللبدء، يرجى متابعة حسابنا على الإنستغرام أولاً ثم الضغط على زر التأكيد أدناه:",
+        reply_markup=markup
+    )
+
+# بعد تأكيد الإنستغرام -> إظهار زر الإعلان
+@bot.callback_query_handler(func=lambda call: call.data == "done_insta")
+def after_instagram(call):
+    user_id = call.from_user.id
+    user_ad_status[user_id] = False
+    
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان لفتح التحميل", callback_data="click_ad"))
+    
+    bot.edit_message_text(
+        "ممتاز! تم تأكيد المتابعة بنجاح ✅\n\nالآن لتحميل أي فيديو، يجب عليك الضغط على زر الإعلان أدناه لفتح إذن التحميل:",
+        call.message.chat.id,
+        call.message.message_id,
+        reply_markup=markup
+    )
+
+# عند الضغط على زر الإعلان -> تفعيل الصلاحية فوراً وفتح الرابط
+@bot.callback_query_handler(func=lambda call: call.data == "click_ad")
+def handle_ad_click(call):
+    user_id = call.from_user.id
+    user_ad_status[user_id] = True  # تفعيل الصلاحية
+    
+    bot.answer_callback_query(call.id, url=AD_URL)
+    
     bot.send_message(
         call.message.chat.id,
-        "🎉 شكرًا لك! يمكنك الآن إرسال رابط أي فيديو لتحميله مباشرة."
+        "✅ تم تفعيل إذن التحميل بنجاح!\nأرسل رابط الفيديو الآن وسأقوم بتحميله فوراً:"
     )
 
-
-# =====================================================
-# 6. استقبال روابط الفيديو
-# =====================================================
-
-@bot.message_handler(content_types=["text"], func=lambda message: not message.text.startswith("/"))
-def receive_video(message):
+# معالجة التحميل
+@bot.message_handler(func=lambda message: True)
+def handle_download(message):
     user_id = message.from_user.id
-    chat_id = message.chat.id
-    video_url = message.text.strip()
-
-    if user_id not in instagram_verified:
-        bot.reply_to(
-            message,
-            "⚠️ لا يمكنك التحميل حتى تتم متابعة الانستغرام أولاً.\nأرسل /start لإتمام الخطوة."
-        )
-        return
-
-    if not valid_url(video_url):
-        bot.reply_to(message, "⚠️ أرسل رابطاً صالحاً يبدأ بـ http:// أو https://")
-        return
-
-    with state_lock:
-        if user_id in pending_urls:
-            bot.reply_to(message, "⏳ لديك رابط سابق قيد المعالجة. انتظر حتى ينتهي.")
-            return
-
-        pending_urls[user_id] = video_url
-        user_states[user_id] = "waiting_confirmation"
-
-    try:
-        send_tracked(
-            user_id,
-            chat_id,
-            "📢 لتحميل الفيديو المطلوب:\n\n"
-            "1️⃣ اضغط على زر **فتح الإعلان**.\n"
-            "2️⃣ ارجع واضغط زر **تأكيد مشاهدة الإعلان** للبدء.",
-            parse_mode="Markdown",
-            reply_markup=create_ad_keyboard()
-        )
-
-        start_user_timer(user_id, WAIT_SECONDS, send_confirmation_reminder, user_id, chat_id)
-
-    except Exception:
-        logger.exception("تعذر إرسال رسالة الإعلان.")
-        with state_lock:
-            pending_urls.pop(user_id, None)
-            user_states.pop(user_id, None)
-        bot.reply_to(message, "❌ تعذر إنشاء طلب التحميل. حاول مجدداً.")
-
-
-def send_confirmation_reminder(user_id, chat_id):
-    with state_lock:
-        if user_states.get(user_id) != "waiting_confirmation":
-            return
-        user_timers.pop(user_id, None)
-
-    try:
-        send_tracked(
-            user_id,
-            chat_id,
-            "⚠️ لم يتم تأكيد مشاهدة الإعلان بعد!\n\n"
-            "افتح الإعلان ثم اضغط زر التأكيد للبدء.",
-            reply_markup=create_ad_keyboard()
-        )
-    except Exception:
-        logger.exception("تعذر إرسال رسالة التذكير.")
-
-
-# =====================================================
-# 7. معالجة الإعلان والتنزيل
-# =====================================================
-
-@bot.callback_query_handler(func=lambda call: call.data == "confirm_ad")
-def handle_ad_confirmation(call):
-    user_id = call.from_user.id
-    chat_id = call.message.chat.id
-
-    with state_lock:
-        state = user_states.get(user_id)
-        if user_id not in pending_urls:
-            state = None
-
-        if state == "confirmed":
-            bot.answer_callback_query(call.id, "تم تأكيد طلبك مسبقاً، انتظر التحميل.")
-            return
-        if state == "downloading":
-            bot.answer_callback_query(call.id, "التحميل قيد التنفيذ بالفعل.")
-            return
-        if state != "waiting_confirmation":
-            bot.answer_callback_query(call.id, "أرسل رابط الفيديو أولاً.")
-            return
-
-        user_states[user_id] = "confirmed"
-
-    cancel_user_timer(user_id)
-    bot.answer_callback_query(call.id, "تم تسجيل التأكيد بنجاح.")
-
-    try:
-        send_tracked(
-            user_id,
-            chat_id,
-            "✅ تم تسجيل التأكيد.\n\n⏳ سيبدأ التحميل تلقائياً خلال لحظات..."
-        )
-        start_user_timer(user_id, 2, process_download, user_id, chat_id)
-    except Exception:
-        logger.exception("تعذر بدء مؤقت التحميل.")
-        with state_lock:
-            user_states[user_id] = "waiting_confirmation"
-        bot.send_message(chat_id, "❌ تعذر بدء الطلب. حاول مجدداً.")
-
-
-def process_download(user_id, chat_id):
-    with state_lock:
-        if user_states.get(user_id) != "confirmed":
-            return
-        video_url = pending_urls.get(user_id)
-        if not video_url:
-            pending_urls.pop(user_id, None)
-            user_states.pop(user_id, None)
-            return
-
-        user_states[user_id] = "downloading"
-        user_timers.pop(user_id, None)
-
-    request_id = uuid.uuid4().hex
-    output_template = str(DOWNLOAD_DIR / f"{user_id}_{request_id}.%(ext)s")
-    downloaded_file = None
-    status_message = None
-    success = False
-
-    try:
-        status_message = bot.send_message(chat_id, "⏳ جارٍ تحميل الفيديو، يرجى الانتظار...")
-
-        options = {
-            "outtmpl": output_template,
-            "format": "best[ext=mp4]/best",
-            "noplaylist": True,
-            "max_filesize": MAX_FILE_SIZE,
-            "quiet": True,
-            "no_warnings": True,
-            "retries": 2,
-            "socket_timeout": 30,
-        }
-
-        with yt_dlp.YoutubeDL(options) as ydl:
-            info = ydl.extract_info(video_url, download=True)
-            downloaded_file = Path(ydl.prepare_filename(info))
-
-        if not downloaded_file.exists():
-            candidates = list(DOWNLOAD_DIR.glob(f"{user_id}_{request_id}.*"))
-            if candidates:
-                downloaded_file = candidates[0]
-
-        if not downloaded_file.exists():
-            raise FileNotFoundError("لم يتم العثور على ملف الفيديو بعد التحميل.")
-
-        if downloaded_file.stat().st_size > MAX_FILE_SIZE:
-            raise ValueError("حجم الفيديو أكبر من 50 ميغابايت المسموح بها.")
-
-        with downloaded_file.open("rb") as video:
-            bot.send_video(chat_id, video, supports_streaming=True, timeout=120)
-
-        success = True
-        logger.info("تم إرسال الفيديو للمستخدم %s بنجاح", user_id)
-
-    except Exception as exc:
-        logger.exception("فشل تنزيل الفيديو للمستخدم %s", user_id)
-        try:
-            bot.send_message(
-                chat_id,
-                f"❌ تعذر تحميل الفيديو.\nتأكد من صلاحية الرابط وأنه عام.\nالتفاصيل: {str(exc)[:300]}"
-            )
-        except Exception:
-            pass
-
-    finally:
-        if downloaded_file and downloaded_file.exists():
-            try:
-                downloaded_file.unlink()
-            except OSError:
-                pass
-
-        if status_message:
-            try:
-                bot.delete_message(chat_id, status_message.message_id)
-            except Exception:
-                pass
-
-        with state_lock:
-            pending_urls.pop(user_id, None)
-            user_states.pop(user_id, None)
-            user_timers.pop(user_id, None)
-
-    if success:
-        delete_ad_messages(user_id)
-        try:
-            bot.send_message(
-                chat_id,
-                "✅ تم إرسال الفيديو بنجاح.\n\nلتحميل فيديو آخر، اضغط أدناه:",
-                reply_markup=create_next_keyboard()
-            )
-        except Exception:
-            pass
-
-
-@bot.callback_query_handler(func=lambda call: call.data == "next_video")
-def next_video(call):
-    try:
-        bot.delete_message(call.message.chat.id, call.message.message_id)
-    except Exception:
-        pass
-
-    bot.answer_callback_query(call.id, "أرسل رابط الفيديو الجديد الآن.")
-    bot.send_message(call.message.chat.id, "📎 أرسل رابط الفيديو الجديد.")
-
-
-# =====================================================
-# 8. تشغيل البوت
-# =====================================================
-
-if __name__ == "__main__":
-    logger.info("Media Downloader Bot is starting...")
-    while True:
-        try:
-            bot.infinity_polling(skip_pending=True, timeout=30, long_polling_timeout=30)
-        except KeyboardInterrupt:
-            logger.info("تم إيقاف البوت بواسطة المستخدم.")
-            break
-        except Exception:
-            logger.exception("انقطع الاتصال. إعادة المحاولة بعد 5 ثوانٍ...")
-            time.sleep(5)
+    save_user(user_id)
+    text = message.text.strip()
     
+    if text.startswith('http'):
+        # التحقق هل قام بالضغط على زر الإعلان؟
+        if not user_ad_status.get(user_id, False):
+            markup = InlineKeyboardMarkup()
+            markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان أولاً", callback_data="click_ad"))
+            
+            bot.reply_to(
+                message,
+                "⚠️ عذراً! لا يمكنك تحميل الفيديو حتى تضغط على زر الإعلان أدناه أولاً:",
+                reply_markup=markup
+            )
+            return
+
+        # إبطال الصلاحية فوراً للفيديو القادم
+        user_ad_status[user_id] = False
+
+        file_name = f"video_{user_id}.mp4"
+        msg = bot.reply_to(message, "⏳ جاري تحميل الفيديو، يرجى الانتظار...")
+        try:
+            ydl_opts = {
+                'outtmpl': file_name,
+                'format': 'best/bestvideo+bestaudio/best',
+                'max_filesize': 50 * 1024 * 1024,
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([text])
+
+            if os.path.exists(file_name):
+                with open(file_name, 'rb') as vid:
+                    bot.send_video(message.chat.id, vid)
+                bot.delete_message(message.chat.id, msg.message_id)
+
+            # طلب مشاهدة إعلان جديد للفيديو القادم
+            markup = InlineKeyboardMarkup()
+            markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان لتحميل فيديو آخر", callback_data="click_ad"))
+            
+            bot.send_message(
+                message.chat.id,
+                "💡 لتحميل فيديو آخر، اضغط على زر الإعلان أدناه ثم أرسل الرابط:",
+                reply_markup=markup
+            )
+
+        except Exception as e:
+            bot.edit_message_text(f"❌ حدث خطأ أثناء التحميل: تأكد من أن الرابط صالح وعام.\nالتفاصيل: {str(e)}", message.chat.id, msg.message_id)
+        finally:
+            if os.path.exists(file_name):
+                os.remove(file_name)
+    else:
+        bot.reply_to(message, "الرجاء إرسال رابط فيديو صالح يبدأ بـ http أو إرسال /start للبدء.")
+
+bot.infinity_polling(skip_pending=True)
