@@ -15,7 +15,7 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 # 1. الإعدادات
 # =====================================================
 
-TOKEN = os.getenv("8823255880:AAF93L25L5u5EX69Z8vF0xETIQMGV7vZedA", "").strip()
+TOKEN = os.getenv("8823255880:AAFUlGDBt5HWNt6qCzrk8IkXRy3_O2xFfW4", "").strip()
 
 AD_URL = "https://uplcm.com/4/11968073"
 INSTAGRAM_URL = "https://www.instagram.com/mah__asw"
