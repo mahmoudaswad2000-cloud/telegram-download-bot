@@ -1,4 +1,3 @@
-
 import os
 import time
 import uuid
@@ -17,6 +16,7 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 # =====================================================
 
 TOKEN = os.getenv("8823255880:AAFUlGDBt5HWNt6qCzrk8IkXRy3_O2xFfW4", "").strip()
+
 AD_URL = "https://uplcm.com/4/11968073"
 INSTAGRAM_URL = "https://www.instagram.com/mah__asw"
 
@@ -28,7 +28,7 @@ DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 if not TOKEN:
     raise RuntimeError(
-        "لم يتم تعيين 8823255880:AAFUlGDBt5HWNt6qCzrk8IkXRy3_O2xFfW4. "
+        "لم يتم تعيين TELEGRAM_BOT_TOKEN. "
         "أضف توكن البوت الجديد إلى متغيرات البيئة."
     )
 
@@ -602,4 +602,4 @@ if __name__ == "__main__":
                 "انقطع الاتصال. إعادة المحاولة بعد 5 ثوانٍ."
             )
             time.sleep(5)
-            
+    
