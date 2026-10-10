@@ -6,7 +6,8 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 TOKEN = "8823255880:AAF93L25L5u5EX69Z8vF0xETIQMGV7vZedA"
 bot = telebot.TeleBot(TOKEN)
 
-INSTAGRAM_URL = "https://www.instagram.com/mah__asw"
+# الروابط المحدثة
+INSTAGRAM_URL = "https://www.instagram.com/mah__asw?psln=bHVtbTd0NGVkaWh2"
 AD_URL = "https://uplcm.com/4/11968073"
 
 # تتبع حالة كل مستخدم بدقة لمنع تجاوز الإعلان
@@ -99,18 +100,19 @@ def handle_download(message):
         # إبطال الإذن فوراً لكي يضطر لضغط الإعلان في الفيديو القادم
         user_ad_status[user_id] = False
 
+        file_name = f"video_{user_id}.mp4"
         msg = bot.reply_to(message, "⏳ جاري تحميل الفيديو، يرجى الانتظار...")
         try:
             ydl_opts = {
-                'outtmpl': 'downloaded_video.mp4',
+                'outtmpl': file_name,
                 'format': 'best/bestvideo+bestaudio/best',
                 'max_filesize': 50 * 1024 * 1024,
             }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([text])
 
-            if os.path.exists('downloaded_video.mp4'):
-                with open('downloaded_video.mp4', 'rb') as vid:
+            if os.path.exists(file_name):
+                with open(file_name, 'rb') as vid:
                     bot.send_video(message.chat.id, vid)
                 bot.delete_message(message.chat.id, msg.message_id)
 
@@ -127,10 +129,9 @@ def handle_download(message):
         except Exception as e:
             bot.edit_message_text(f"❌ حدث خطأ أثناء التحميل: تأكد من أن الرابط صالح وعام.\nالتفاصيل: {str(e)}", message.chat.id, msg.message_id)
         finally:
-            if os.path.exists('downloaded_video.mp4'):
-                os.remove('downloaded_video.mp4')
+            if os.path.exists(file_name):
+                os.remove(file_name)
     else:
         bot.reply_to(message, "الرجاء إرسال رابط فيديو صالح يبدأ بـ http أو إرسال /start للبدء.")
 
-bot.infinity_polling()
-            
+bot.infinity_polling(skip_pending=True)
