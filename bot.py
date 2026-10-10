@@ -72,45 +72,55 @@ def verify_insta(call):
     
     tracker['checked_insta'] = True
     
-    # إظهار زر واحد فقط للإعلان
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان وفتح التحميل", callback_data="open_ad_hidden_timer"))
+    markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان بمتصفح خارجي", callback_data="open_external_ad"))
     
     bot.edit_message_text(
-        "ممتاز! تم تأكيد المتابعة بنجاح ✅\n\nالآن لتحميل أي فيديو، اضغط على زر الإعلان أدناه لفتحه في المتصفح والانتظار 10 ثوانٍ، ثم أرسل رابط الفيديو مباشرة:",
+        "ممتاز! تم تأكيد المتابعة بنجاح ✅\n\nالآن لتحميل أي فيديو، اضغط على زر الإعلان أدناه وسيتم تفعيل التحميل تلقائياً بعد 10 ثوانٍ:",
         call.message.chat.id,
         call.message.message_id,
         reply_markup=markup
     )
 
-def run_hidden_timer(user_id):
+def auto_enable_download(chat_id, user_id):
     tracker = get_user_tracker(user_id)
     tracker['is_counting'] = True
     tracker['can_download'] = False
     
-    # العداد المخفي لمدة 10 ثوانٍ في الخلفية
+    # الانتظار لمدة 10 ثوانٍ
     time.sleep(AD_WAIT_SECONDS)
     
+    # التفعيل التلقائي
     tracker['is_counting'] = False
     tracker['can_download'] = True
+    
+    # إشعار المستخدم بالتفعيل التلقائي
+    try:
+        bot.send_message(
+            chat_id,
+            "✅ **تم اكتشافه واكتمال الـ 10 ثوانٍ بنجاح!**\nتم فتح إذن التحميل تلقائياً 🎉\n\nأرسل رابط الفيديو الآن وسأقوم بتحميله فوراً:"
+        )
+    except Exception:
+        pass
 
-@bot.callback_query_handler(func=lambda call: call.data == "open_ad_hidden_timer")
-def open_ad_hidden_timer(call):
+@bot.callback_query_handler(func=lambda call: call.data == "open_external_ad")
+def open_external_ad(call):
     user_id = call.from_user.id
+    chat_id = call.message.chat.id
     tracker = get_user_tracker(user_id)
     
     tracker['clicked_ad'] = True
     
-    # 1. فتح رابط الإعلان فوراً في المتصفح الخارجي
+    # 1. فتح رابط الإعلان في المتصفح الخارجي فوراً
     bot.answer_callback_query(call.id, url=AD_URL)
     
-    # 2. تشغيل العداد المخفي في الخلفية
+    # 2. بدء العداد التلقائي للتفعيل في الخلفية
     if not tracker.get('is_counting', False):
-        threading.Thread(target=run_hidden_timer, args=(user_id,)).start()
+        threading.Thread(target=auto_enable_download, args=(chat_id, user_id)).start()
     
     bot.send_message(
-        call.message.chat.id,
-        "⏳ **تم فتح الإعلان بنجاح!**\nيرجى البقاء في صفحة الإعلان لمدة **10 ثوانٍ**، وبعدها أرسل رابط الفيديو وسأقوم بتحميله فوراً:"
+        chat_id,
+        "🌐 **تم فتح الإعلان في المتصفح الخارجي!**\nجاري العد التنازلي (10 ثوانٍ)... سيتم تفعيل التحميل لك **تلقائياً** فور انتهائها دون الحاجة للضغط على أي زر."
     )
 
 @bot.message_handler(func=lambda message: True)
@@ -121,7 +131,7 @@ def handle_download(message):
     tracker = get_user_tracker(user_id)
 
     if text.startswith('http'):
-        # 1. التحقق من شرط الإنستغرام
+        # 1. التحقق من متابعة الإنستغرام
         if not tracker.get('checked_insta', False):
             markup = InlineKeyboardMarkup()
             markup.add(InlineKeyboardButton("🔗 اضغط هنا لفتح رابط الإنستغرام", url=INSTAGRAM_URL))
@@ -129,40 +139,37 @@ def handle_download(message):
             bot.reply_to(message, "⚠️ يرجى متابعة حسابنا على الإنستغرام أولاً:", reply_markup=markup)
             return
 
-        # 2. إذا لم يضغط على زر الإعلان نهائياً
+        # 2. إذا لم يفتح الإعلان نهائياً
         if not tracker.get('clicked_ad', False):
             markup = InlineKeyboardMarkup()
-            markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان وفتح التحميل", callback_data="open_ad_hidden_timer"))
+            markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان بمتصفح خارجي", callback_data="open_external_ad"))
             bot.reply_to(
                 message,
-                "⚠️ **عذراً! يجب عليك فتح رابط الإعلان أولاً.**\nاضغط على زر الإعلان أدناه وانتظر 10 ثوانٍ ثم أرسل الرابط:",
+                "⚠️ **عذراً! يجب عليك فتح رابط الإعلان بمتصفح خارجي أولاً.**\nاضغط على الزر أدناه وانتظر التفعيل التلقائي:",
                 reply_markup=markup
             )
             return
 
-        # 3. إذا ضغط على الرابط ولكن العداد المخفي لا يزال يعمل ولم تنتهِ الـ 10 ثوانٍ
+        # 3. إذا أرسل الرابط أثناء العد التنازلي وقبل انتهاء الـ 10 ثوانٍ
         if tracker.get('is_counting', False):
-            markup = InlineKeyboardMarkup()
-            markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان مرة أخرى", callback_data="open_ad_hidden_timer"))
             bot.reply_to(
                 message,
-                "⏳ **الرجاء الانتظار!**\nلم تنتهِ الـ 10 ثوانٍ الخاصة بالإعلان بعد. يرجى الانتظار ثم إرسال الرابط:",
-                reply_markup=markup
+                "⏳ **يرجى الانتظار!**\nالعد التنازلي جاري حالياً (10 ثوانٍ)، وسنقوم بتفعيل التحميل لك تلقائياً خلال لحظات..."
             )
             return
 
-        # 4. إذا لم يستوفِ التفعيل لأي سبب آخر
+        # 4. إذا لم يكتمل التفعيل لأي سبب
         if not tracker.get('can_download', False):
             markup = InlineKeyboardMarkup()
-            markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان وفتح التحميل", callback_data="open_ad_hidden_timer"))
+            markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان بمتصفح خارجي", callback_data="open_external_ad"))
             bot.reply_to(
                 message,
-                "⚠️ **عذراً!** يجب عليك الضغط على زر الإعلان والانتظار 10 ثوانٍ قبل إرسال الرابط:",
+                "⚠️ **عذراً!** اضغط على زر الإعلان بمتصفح خارجي وانتظر 10 ثوانٍ للتفعيل التلقائي:",
                 reply_markup=markup
             )
             return
 
-        # تصفير حالة الإعلان للفيديو التالي
+        # تصفير الإذن للفيديو التالي (طلب إعلان جديد لكل فيديو)
         tracker['can_download'] = False
         tracker['clicked_ad'] = False
 
@@ -182,11 +189,11 @@ def handle_download(message):
                 bot.delete_message(message.chat.id, msg.message_id)
 
             markup = InlineKeyboardMarkup()
-            markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان لتحميل فيديو آخر", callback_data="open_ad_hidden_timer"))
+            markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان بمتصفح خارجي لتحميل فيديو آخر", callback_data="open_external_ad"))
             
             bot.send_message(
                 message.chat.id,
-                "💡 لتحميل فيديو آخر، اضغط على زر الإعلان أدناه وانتظر 10 ثوانٍ ثم أرسل الرابط مباشرة:",
+                "💡 لتحميل فيديو آخر، اضغط على زر الإعلان وانتظر 10 ثوانٍ ليتم التفعيل تلقائياً ثم أرسل الرابط:",
                 reply_markup=markup
             )
 
