@@ -66,53 +66,60 @@ def after_instagram(call):
     state['authorized'] = False
     state['remaining'] = AD_WAIT_SECONDS
     
-    # زر مدمج واحد للإعلان والتحقق
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان وتفعيل التحميل", callback_data="click_ad_and_verify"))
+    markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان لفتح التحميل", callback_data="single_ad_click"))
     
     bot.edit_message_text(
-        "ممتاز! تم تأكيد متابعة الإنستغرام بنجاح ✅\n\nالآن لتحميل أي فيديو، اضغط على زر الإعلان المدمج أدناه للفتح والتحقق المباشر:",
+        "ممتاز! تم تأكيد الإنستغرام بنجاح ✅\n\nاضغط على زر الإعلان أدناه لفتح الإعلان وبدء العداد تلقائياً:",
         call.message.chat.id,
         call.message.message_id,
         reply_markup=markup
     )
 
-# معالجة الضغطة المدمجة للإعلان والتحقق
-@bot.callback_query_handler(func=lambda call: call.data == "click_ad_and_verify")
-def handle_ad_and_verify(call):
+@bot.callback_query_handler(func=lambda call: call.data == "single_ad_click")
+def handle_single_ad_click(call):
     user_id = call.from_user.id
     state = get_user_state(user_id)
 
-    # 1. فتح رابط الإعلان فوراً عبر التنبيه المباشر
+    # 1. فتح رابط الإعلان في المتصفح فوراً للمستخدم
     bot.answer_callback_query(call.id, url=AD_URL)
 
     if state['remaining'] <= 0:
         state['remaining'] = AD_WAIT_SECONDS
 
-    # 2. تشغيل العداد التنازلي التفاعلي
-    msg = bot.send_message(call.message.chat.id, f"⏳ جاري تحقق مشاهدة الإعلان... متبقي **{state['remaining']}** ثوانٍ.")
-
+    # 2. تحويل نفس الزر ليتحدث بالعداد التنازلي
     while state['remaining'] > 0:
+        rem = state['remaining']
+        markup = InlineKeyboardMarkup()
+        markup.add(InlineKeyboardButton(f"⏳ يرجى الانتظار في الإعلان ({rem} ثوانٍ)...", callback_data="waiting"))
+        try:
+            bot.edit_message_reply_markup(
+                call.message.chat.id,
+                call.message.message_id,
+                reply_markup=markup
+            )
+        except Exception:
+            pass
+        
         time.sleep(1)
         state['remaining'] -= 1
-        rem = state['remaining']
-        
-        if rem > 0:
-            try:
-                bot.edit_message_text(
-                    f"⏳ جاري تحقق مشاهدة الإعلان... متبقي **{rem}** ثوانٍ.",
-                    call.message.chat.id,
-                    msg.message_id
-                )
-            except Exception:
-                pass
 
+    # 3. تغيير نفس الزر بعد اكتمال العداد لمنح الإذن
     state['authorized'] = True
-    bot.edit_message_text(
-        "✅ تم تأكيد مشاهدة الإعلان بنجاح!\n\nأرسل رابط الفيديو الآن (من يوتيوب، تيك توك، إنستغرام، فيسبوك...) وسأقوم بتحميله فوراً:",
-        call.message.chat.id,
-        msg.message_id
-    )
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("✅ تم التفعيل بنجاح! أرسل رابط الفيديو الآن", callback_data="verified"))
+    try:
+        bot.edit_message_reply_markup(
+            call.message.chat.id,
+            call.message.message_id,
+            reply_markup=markup
+        )
+    except Exception:
+        pass
+
+@bot.callback_query_handler(func=lambda call: call.data in ["waiting", "verified"])
+def handle_passive_clicks(call):
+    bot.answer_callback_query(call.id)
 
 @bot.message_handler(func=lambda message: True)
 def handle_download(message):
@@ -125,16 +132,16 @@ def handle_download(message):
         if not state.get('authorized', False):
             rem = state.get('remaining', AD_WAIT_SECONDS)
             markup = InlineKeyboardMarkup()
-            markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان وتفعيل التحميل", callback_data="click_ad_and_verify"))
+            markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان لفتح التحميل", callback_data="single_ad_click"))
             
             bot.reply_to(
                 message,
-                f"⚠️ **تمهل حتى ينتهي العداد!**\nعذراً، لم تنتهِ من مشاهدة الإعلان بعد (متبقي **{rem}** ثوانٍ). يرجى الضغط على الزر المدمج أدناه للتحقق والانتظار:",
+                f"⚠️ **تمهل حتى ينتهي العداد!**\nعذراً، لم تنتهِ من مشاهدة الإعلان بعد (متبقي **{rem}** ثوانٍ). اضغط على الزر أعلاه وانتظر انتهاء العداد:",
                 reply_markup=markup
             )
             return
 
-        # إبطال التفعيل وإعادة ضبط العداد للفيديو التالي
+        # إعادة ضبط الحالة للمرة القادمة
         state['authorized'] = False
         state['remaining'] = AD_WAIT_SECONDS
 
@@ -154,7 +161,7 @@ def handle_download(message):
                 bot.delete_message(message.chat.id, msg.message_id)
 
             markup = InlineKeyboardMarkup()
-            markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان لتحميل فيديو آخر", callback_data="click_ad_and_verify"))
+            markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان لتحميل فيديو آخر", callback_data="single_ad_click"))
             
             bot.send_message(
                 message.chat.id,
@@ -171,3 +178,4 @@ def handle_download(message):
         bot.reply_to(message, "الرجاء إرسال رابط فيديو صالح يبدأ بـ http أو إرسال /start للبدء.")
 
 bot.infinity_polling()
+    
