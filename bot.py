@@ -1,34 +1,24 @@
 import os
-import time
-import threading
 import telebot
 import yt_dlp
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 TOKEN = "8823255880:AAF93L25L5u5EX69Z8vF0xETIQMGV7vZedA"
-bot = telebot.TeleBot(TOKEN, threaded=True)
+bot = telebot.TeleBot(TOKEN)
 
-# الروابط المباشرة
-INSTAGRAM_URL = "https://www.instagram.com/mah__asw?psln=bHVtbTd0NGVkaWh2"
+INSTAGRAM_URL = "https://www.instagram.com/mah__asw"
 AD_URL = "https://uplcm.com/4/11968073"
 
-AD_WAIT_SECONDS = 10
-user_tracker = {}
+# تتبع حالة كل مستخدم بدقة لمنع تجاوز الإعلان
+user_ad_status = {}
 
-def get_user_tracker(user_id):
-    if user_id not in user_tracker:
-        user_tracker[user_id] = {
-            'checked_insta': False,
-            'can_download': False,
-            'is_counting': False
-        }
-    return user_tracker[user_id]
-
+# دالة لحفظ ومعرفة عدد المستخدمين في ملف نصي محلي
 def save_user(user_id):
     users = set()
     if os.path.exists('users.txt'):
         with open('users.txt', 'r') as f:
             users = set(line.strip() for line in f if line.strip())
+    
     if str(user_id) not in users:
         with open('users.txt', 'a') as f:
             f.write(f"{user_id}\n")
@@ -39,6 +29,7 @@ def get_users_count():
     with open('users.txt', 'r') as f:
         return len(set(line.strip() for line in f if line.strip()))
 
+# أمر الإحصائيات لمعرفة عدد مستخدمي البوت
 @bot.message_handler(commands=['stats'])
 def show_stats(message):
     count = get_users_count()
@@ -47,101 +38,66 @@ def show_stats(message):
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
     user_id = message.from_user.id
-    save_user(user_id)
-    
-    tracker = get_user_tracker(user_id)
-    tracker['checked_insta'] = False
-    tracker['can_download'] = False
-    tracker['is_counting'] = False
+    save_user(user_id)  # تسجيل المستخدم عند الضغط على start
+    user_ad_status[user_id] = False 
     
     markup = InlineKeyboardMarkup()
-    # رابط إنستغرام مباشر
-    markup.add(InlineKeyboardButton("🔗 تابعنا على إنستغرام", url=INSTAGRAM_URL))
-    markup.add(InlineKeyboardButton("✅ تم الاشتراك، متابعة", callback_data="verify_insta"))
+    markup.add(InlineKeyboardButton("🔗 1. تابعنا على إنستغرام (@mah__asw)", url=INSTAGRAM_URL))
+    markup.add(InlineKeyboardButton("✅ 2. تم الاشتراك، متابعة", callback_data="done_insta"))
     
     bot.send_message(
         message.chat.id,
-        "مرحباً بك في بوت تحميل الفيديوهات الشامل! 🚀\n\nيدعم البوت التحميل من جميع المنصات.\n\nيرجى متابعة حسابنا عبر الزر أدناه ثم الضغط على متابعة للبدء:",
+        "مرحباً بك في بوت تحميل الفيديوهات الشامل! 🚀\n\nيدعم البوت التحميل من **يوتيوب، إنستغرام، تيك توك، فيسبوك، تويتر** وجميع المنصات.\n\nللبدء، يرجى متابعة حسابنا الإجباري على الإنستغرام أولاً ثم الضغط على زر التأكيد أدناه:",
         reply_markup=markup
     )
 
-@bot.callback_query_handler(func=lambda call: call.data == "verify_insta")
-def verify_insta(call):
+@bot.callback_query_handler(func=lambda call: call.data == "done_insta")
+def after_instagram(call):
     user_id = call.from_user.id
-    chat_id = call.message.chat.id
-    tracker = get_user_tracker(user_id)
+    user_ad_status[user_id] = False
     
-    tracker['checked_insta'] = True
-    
-    # رابط إعلان مباشر بدون أزرار ثانوية
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان وفتح التحميل", url=AD_URL))
+    markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان لفتح التحميل", callback_data="click_ad"))
     
-    # بدء التجهيز التلقائي بالخلفية بمجرد الانتقال للخطوة
-    if not tracker.get('is_counting', False):
-        threading.Thread(target=auto_enable_download, args=(chat_id, user_id)).start()
-
     bot.edit_message_text(
-        "تم التأكيد بنجاح! 🎉\n\nاضغط على زر الإعلان أدناه لفتحه، وسيكون التحميل جاهزاً لك خلال لحظات:",
-        chat_id,
+        "ممتاز! تم تأكيد الإنستغرام بنجاح ✅\n\nالآن لتحميل أي فيديو من أي منصة، يجب عليك الضغط على زر الإعلان أدناه أولاً:",
+        call.message.chat.id,
         call.message.message_id,
         reply_markup=markup
     )
 
-def auto_enable_download(chat_id, user_id):
-    tracker = get_user_tracker(user_id)
-    tracker['is_counting'] = True
-    tracker['can_download'] = False
+@bot.callback_query_handler(func=lambda call: call.data == "click_ad")
+def handle_ad_click(call):
+    user_id = call.from_user.id
+    user_ad_status[user_id] = True
+    bot.answer_callback_query(call.id, url=AD_URL)
     
-    time.sleep(AD_WAIT_SECONDS)
-    
-    tracker['is_counting'] = False
-    tracker['can_download'] = True
-    
-    try:
-        bot.send_message(
-            chat_id,
-            "✅ **تم التفعيل بنجاح!**\n\nأرسل رابط الفيديو الآن وسأقوم بتحميله فوراً:"
-        )
-    except Exception:
-        pass
+    bot.send_message(
+        call.message.chat.id,
+        "✅ شكراً لك! تم تفعيل إذن التحميل. أرسل رابط الفيديو (من يوتيوب، تيك توك، إنستغرام، فيسبوك...) وسأقوم بتحميله فوراً:"
+    )
 
 @bot.message_handler(func=lambda message: True)
 def handle_download(message):
     user_id = message.from_user.id
-    save_user(user_id)
+    save_user(user_id)  # تسجيل المستخدم عند إرسال أي رابط أو رسالة
     text = message.text.strip()
-    tracker = get_user_tracker(user_id)
-
+    
     if text.startswith('http'):
-        # 1. التحقق من خطوة الإنستغرام
-        if not tracker.get('checked_insta', False):
+        # التحقق الحاسم: هل ضغط المستخدم على زر الإعلان؟
+        if not user_ad_status.get(user_id, False):
             markup = InlineKeyboardMarkup()
-            markup.add(InlineKeyboardButton("🔗 تابعنا على إنستغرام", url=INSTAGRAM_URL))
-            markup.add(InlineKeyboardButton("✅ تم الاشتراك، متابعة", callback_data="verify_insta"))
-            bot.reply_to(message, "يرجى متابعة حسابنا على الإنستغرام أولاً:", reply_markup=markup)
-            return
-
-        # 2. في حال إرسال الرابط أثناء التجهيز
-        if tracker.get('is_counting', False):
-            bot.reply_to(message, "⏳ جاري التجهيز، يرجى الانتظار لحظات...")
-            return
-
-        # 3. إذا لم يكتمل التفعيل بعد
-        if not tracker.get('can_download', False):
-            markup = InlineKeyboardMarkup()
-            markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان وفتح التحميل", url=AD_URL))
+            markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان أولاً", callback_data="click_ad"))
+            
             bot.reply_to(
                 message,
-                "يرجى الضغط على زر الإعلان أدناه أولاً لفتح التحميل:",
+                "⚠️ عذراً! لا يمكنك تحميل الفيديو حتى تضغط على زر الإعلان أدناه أولاً:",
                 reply_markup=markup
             )
-            if not tracker.get('is_counting', False):
-                threading.Thread(target=auto_enable_download, args=(message.chat.id, user_id)).start()
             return
 
-        # تصفير الإذن للفيديو التالي (لإجبار الإعلان لكل فيديو جديد)
-        tracker['can_download'] = False
+        # إبطال الإذن فوراً لكي يضطر لضغط الإعلان في الفيديو القادم
+        user_ad_status[user_id] = False
 
         msg = bot.reply_to(message, "⏳ جاري تحميل الفيديو، يرجى الانتظار...")
         try:
@@ -158,21 +114,17 @@ def handle_download(message):
                     bot.send_video(message.chat.id, vid)
                 bot.delete_message(message.chat.id, msg.message_id)
 
+            # إرسال زر الإعلان فقط لتحميل الفيديو القادم
             markup = InlineKeyboardMarkup()
-            markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان لتحميل فيديو آخر", url=AD_URL))
+            markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان لتحميل فيديو آخر", callback_data="click_ad"))
             
-            # إعادة التجهيز للفيديو القادم
-            if not tracker.get('is_counting', False):
-                threading.Thread(target=auto_enable_download, args=(message.chat.id, user_id)).start()
-
             bot.send_message(
                 message.chat.id,
-                "💡 لتحميل فيديو آخر، اضغط على زر الإعلان أدناه ثم أرسل الرابط مباشرة:",
+                "💡 لتحميل فيديو آخر، اضغط على زر الإعلان أدناه أولاً ثم أرسل الرابط:",
                 reply_markup=markup
             )
 
         except Exception as e:
-            tracker['can_download'] = True
             bot.edit_message_text(f"❌ حدث خطأ أثناء التحميل: تأكد من أن الرابط صالح وعام.\nالتفاصيل: {str(e)}", message.chat.id, msg.message_id)
         finally:
             if os.path.exists('downloaded_video.mp4'):
