@@ -12,33 +12,9 @@ AD_URL = "https://uplcm.com/4/11968073"
 # تتبع حالة كل مستخدم بدقة لمنع تجاوز الإعلان
 user_ad_status = {}
 
-# دالة لحفظ ومعرفة عدد المستخدمين في ملف نصي محلي
-def save_user(user_id):
-    users = set()
-    if os.path.exists('users.txt'):
-        with open('users.txt', 'r') as f:
-            users = set(line.strip() for line in f if line.strip())
-    
-    if str(user_id) not in users:
-        with open('users.txt', 'a') as f:
-            f.write(f"{user_id}\n")
-
-def get_users_count():
-    if not os.path.exists('users.txt'):
-        return 0
-    with open('users.txt', 'r') as f:
-        return len(set(line.strip() for line in f if line.strip()))
-
-# أمر الإحصائيات لمعرفة عدد مستخدمي البوت
-@bot.message_handler(commands=['stats'])
-def show_stats(message):
-    count = get_users_count()
-    bot.reply_to(message, f"📊 **إحصائيات البوت:**\n\nعدد المستخدِمين الإجمالي: **{count}** مستخدم.")
-
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
     user_id = message.from_user.id
-    save_user(user_id)  # تسجيل المستخدم عند الضغط على start
     user_ad_status[user_id] = False 
     
     markup = InlineKeyboardMarkup()
@@ -47,7 +23,7 @@ def send_welcome(message):
     
     bot.send_message(
         message.chat.id,
-        "مرحباً بك في بوت تحميل الفيديوهات الشامل! 🚀\n\nيدعم البوت التحميل من **يوتيوب، إنستغرام، تيك توك، فيسبوك، تويتر** وجميع المنصات.\n\nللبدء، يرجى متابعة حسابنا الإجباري على الإنستغرام أولاً ثم الضغط على زر التأكيد أدناه:",
+        "مرحباً بك في بوت تحميل الفيديوهات الشامل! 🚀\n\nيدعم البوت التحميل من **يوتيوب، إنستغرام، تيك توك، فيسبوك، تويتر** وجميع منصات التواصل الاجتماعي.\n\nللبدء، يرجى متابعة حسابنا الإجباري على الإنستغرام أولاً ثم الضغط على زر التأكيد أدناه:",
         reply_markup=markup
     )
 
@@ -80,7 +56,6 @@ def handle_ad_click(call):
 @bot.message_handler(func=lambda message: True)
 def handle_download(message):
     user_id = message.from_user.id
-    save_user(user_id)  # تسجيل المستخدم عند إرسال أي رابط أو رسالة
     text = message.text.strip()
     
     if text.startswith('http'):
@@ -99,12 +74,12 @@ def handle_download(message):
         # إبطال الإذن فوراً لكي يضطر لضغط الإعلان في الفيديو القادم
         user_ad_status[user_id] = False
 
-        msg = bot.reply_to(message, "⏳ جاري تحميل الفيديو، يرجى الانتظار...")
+        msg = bot.reply_to(message, "⏳ جاري تحميل الفيديو من المنصة المطلوبة، يرجى الانتظار...")
         try:
             ydl_opts = {
                 'outtmpl': 'downloaded_video.mp4',
                 'format': 'best/bestvideo+bestaudio/best',
-                'max_filesize': 50 * 1024 * 1024,
+                'max_filesize': 50 * 1024 * 1024, # الحد الأقصى لحجم ملف الفيديو ليتوافق مع تيليغرام
             }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([text])
@@ -130,6 +105,6 @@ def handle_download(message):
             if os.path.exists('downloaded_video.mp4'):
                 os.remove('downloaded_video.mp4')
     else:
-        bot.reply_to(message, "الرجاء إرسال رابط فيديو صالح يبدأ بـ http أو إرسال /start للبدء.")
+        bot.reply_to(message, "الرجاء إرسال رابط فيديو صالح (من يوتيوب، إنستغرام، تيك توك، فيسبوك...) يبدأ بـ http أو إرسال /start للبدء.")
 
 bot.infinity_polling()
