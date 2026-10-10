@@ -6,8 +6,7 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 TOKEN = "8823255880:AAF93L25L5u5EX69Z8vF0xETIQMGV7vZedA"
 bot = telebot.TeleBot(TOKEN)
 
-# الروابط المحدثة
-INSTAGRAM_URL = "https://www.instagram.com/mah__asw?psln=bHVtbTd0NGVkaWh2"
+INSTAGRAM_URL = "https://www.instagram.com/mah__asw"
 AD_URL = "https://uplcm.com/4/11968073"
 
 # تتبع حالة كل مستخدم بدقة لمنع تجاوز الإعلان
@@ -55,26 +54,24 @@ def send_welcome(message):
 @bot.callback_query_handler(func=lambda call: call.data == "done_insta")
 def after_instagram(call):
     user_id = call.from_user.id
-    user_ad_status[user_id] = True  # تفعيل حالة مشاهدة الإعلان بمجرد الضغط المباشر على الزر وتوجيهه للرابط
+    user_ad_status[user_id] = False
     
     markup = InlineKeyboardMarkup()
-    # تم تغيير الزر هنا ليصبح رابطاً مباشراً (url) يفتح الإعلان حتماً بدون مشاكل
-    markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان لفتح التحميل", url=AD_URL))
-    markup.add(InlineKeyboardButton("✅ تم مشاهدة الإعلان، ابدأ التحميل", callback_data="confirm_ad"))
+    markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان لفتح التحميل", callback_data="click_ad"))
     
     bot.edit_message_text(
-        "ممتاز! تم تأكيد الإنستغرام بنجاح ✅\n\nالآن اضغط على زر الإعلان لفتحه، ثم اضغط على زر تأكيد المشاهدة أدناه لإرسال روابط الفيديوهات:",
+        "ممتاز! تم تأكيد الإنستغرام بنجاح ✅\n\nالآن لتحميل أي فيديو من أي منصة، يجب عليك الضغط على زر الإعلان أدناه أولاً:",
         call.message.chat.id,
         call.message.message_id,
         reply_markup=markup
     )
 
-@bot.callback_query_handler(func=lambda call: call.data == "confirm_ad")
-def confirm_ad_view(call):
+@bot.callback_query_handler(func=lambda call: call.data == "click_ad")
+def handle_ad_click(call):
     user_id = call.from_user.id
     user_ad_status[user_id] = True
+    bot.answer_callback_query(call.id, url=AD_URL)
     
-    bot.answer_callback_query(call.id, text="تم تفعيل التحميل بنجاح!")
     bot.send_message(
         call.message.chat.id,
         "✅ شكراً لك! تم تفعيل إذن التحميل. أرسل رابط الفيديو (من يوتيوب، تيك توك، إنستغرام، فيسبوك...) وسأقوم بتحميله فوراً:"
@@ -90,12 +87,11 @@ def handle_download(message):
         # التحقق الحاسم: هل ضغط المستخدم على زر الإعلان؟
         if not user_ad_status.get(user_id, False):
             markup = InlineKeyboardMarkup()
-            markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان", url=AD_URL))
-            markup.add(InlineKeyboardButton("✅ تأكيد مشاهدة الإعلان", callback_data="confirm_ad"))
+            markup.add(InlineKeyboardButton("📢 اضغط هنا لمشاهدة الإعلان أولاً", callback_data="click_ad"))
             
             bot.reply_to(
                 message,
-                "⚠️ عذراً! لا يمكنك تحميل الفيديو حتى تشاهد الإعلان وتضغط على تأكيد المشاهدة أدناه:",
+                "⚠️ عذراً! لا يمكنك تحميل الفيديو حتى تضغط على زر الإعلان أدناه أولاً:",
                 reply_markup=markup
             )
             return
@@ -103,40 +99,37 @@ def handle_download(message):
         # إبطال الإذن فوراً لكي يضطر لضغط الإعلان في الفيديو القادم
         user_ad_status[user_id] = False
 
-        file_name = f"video_{user_id}.mp4"
         msg = bot.reply_to(message, "⏳ جاري تحميل الفيديو، يرجى الانتظار...")
         try:
             ydl_opts = {
-                'outtmpl': file_name,
+                'outtmpl': 'downloaded_video.mp4',
                 'format': 'best/bestvideo+bestaudio/best',
                 'max_filesize': 50 * 1024 * 1024,
             }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([text])
 
-            if os.path.exists(file_name):
-                with open(file_name, 'rb') as vid:
+            if os.path.exists('downloaded_video.mp4'):
+                with open('downloaded_video.mp4', 'rb') as vid:
                     bot.send_video(message.chat.id, vid)
                 bot.delete_message(message.chat.id, msg.message_id)
 
-            # إرسال زر الإعلان لتحميل الفيديو القادم
+            # إرسال زر الإعلان فقط لتحميل الفيديو القادم
             markup = InlineKeyboardMarkup()
-            markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان", url=AD_URL))
-            markup.add(InlineKeyboardButton("✅ تأكيد مشاهدة الإعلان", callback_data="confirm_ad"))
+            markup.add(InlineKeyboardButton("📢 مشاهدة الإعلان لتحميل فيديو آخر", callback_data="click_ad"))
             
             bot.send_message(
                 message.chat.id,
-                "💡 لتحميل فيديو آخر، اضغط على زر الإعلان ثم تأكيد المشاهدة أدناه، ثم أرسل الرابط:",
+                "💡 لتحميل فيديو آخر، اضغط على زر الإعلان أدناه أولاً ثم أرسل الرابط:",
                 reply_markup=markup
             )
 
         except Exception as e:
             bot.edit_message_text(f"❌ حدث خطأ أثناء التحميل: تأكد من أن الرابط صالح وعام.\nالتفاصيل: {str(e)}", message.chat.id, msg.message_id)
         finally:
-            if os.path.exists(file_name):
-                os.remove(file_name)
+            if os.path.exists('downloaded_video.mp4'):
+                os.remove('downloaded_video.mp4')
     else:
         bot.reply_to(message, "الرجاء إرسال رابط فيديو صالح يبدأ بـ http أو إرسال /start للبدء.")
 
-bot.infinity_polling(skip_pending=True)
-    
+bot.infinity_polling()
