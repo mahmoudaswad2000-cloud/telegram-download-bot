@@ -15,7 +15,7 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 # 1. الإعدادات
 # =====================================================
 
-TOKEN = os.getenv("8823255880:AAFUlGDBt5HWNt6qCzrk8IkXRy3_O2xFfW4", "").strip()
+TOKEN = "8823255880:AAFUlGDBt5HWNt6qCzrk8IkXRy3_O2xFfW4"
 
 AD_URL = "https://uplcm.com/4/11968073"
 INSTAGRAM_URL = "https://www.instagram.com/mah__asw"
@@ -341,7 +341,6 @@ def process_download(user_id, chat_id):
 def next_video(call):
     user_id = call.from_user.id
     
-    # حذف رسالة الأزرار القديمة لتنظيف الدردشة
     try:
         bot.delete_message(call.message.chat.id, call.message.message_id)
     except Exception:
@@ -366,4 +365,4 @@ if __name__ == "__main__":
         except Exception:
             logger.exception("انقطع الاتصال. إعادة المحاولة بعد 5 ثوانٍ...")
             time.sleep(5)
-    
+            
