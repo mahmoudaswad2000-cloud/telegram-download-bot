@@ -3,7 +3,7 @@ import telebot
 import yt_dlp
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-TOKEN = "8823255880:AAEPjIxn7CP7u31KcQN1qRKcIoJ4LqMqnQw"
+TOKEN = "8606551657:AAHMv81qGzDRXWRtoF9mxQt1N-nX_eTmJ6A"
 bot = telebot.TeleBot(TOKEN)
 
 INSTAGRAM_URL = "https://www.instagram.com/mah__asw?psln=bHVtbTd0NGVkaWh2"
