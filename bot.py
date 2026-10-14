@@ -11,63 +11,32 @@ AD_URL = "https://uplcm.com/4/11968073"
 
 user_ad_status = {}
 
-# دالة حفظ وتتبع المشتركين مع اليوزر نايم والاسم
-def save_user(user):
-    user_id = user.id
-    username = f"@{user.username}" if user.username else "لا يوجد يوزر"
-    first_name = user.first_name if user.first_name else ""
-    last_name = f" {user.last_name}" if user.last_name else ""
-    full_name = f"{first_name}{last_name}".strip() or "لا يوجد اسم"
-    
-    user_entry = f"{user_id} | {username} | {full_name}"
-    
-    existing_ids = set()
+def save_user(user_id):
+    users = set()
     if os.path.exists('users.txt'):
-        with open('users.txt', 'r', encoding='utf-8') as f:
-            for line in f:
-                if '|' in line:
-                    existing_ids.add(line.split('|')[0].strip())
-                elif line.strip():
-                    existing_ids.add(line.strip())
+        with open('users.txt', 'r') as f:
+            users = set(line.strip() for line in f if line.strip())
+    
+    if str(user_id) not in users:
+        with open('users.txt', 'a') as f:
+            f.write(f"{user_id}\n")
 
-    if str(user_id) not in existing_ids:
-        with open('users.txt', 'a', encoding='utf-8') as f:
-            f.write(f"{user_entry}\n")
-
-def get_users_info():
+def get_users_count():
     if not os.path.exists('users.txt'):
-        return 0, []
-    with open('users.txt', 'r', encoding='utf-8') as f:
-        lines = [line.strip() for line in f if line.strip()]
-        return len(lines), lines
+        return 0
+    with open('users.txt', 'r') as f:
+        return len(set(line.strip() for line in f if line.strip()))
 
-# أمر الإحصائيات المحدث لتنسيق وإظهار قائمة اليوزرات
 @bot.message_handler(commands=['stats'])
 def show_stats(message):
-    count, users_list = get_users_info()
-    
-    if count == 0:
-        bot.reply_to(message, "📊 **إحصائيات البوت:**\n\nلا يوجد مستخدمين مسجلين حتى الآن.")
-        return
-
-    # جلب أحدث 20 مستخدم لمنع تجاوز حد رسائل تيليغرام
-    recent_users = users_list[-20:]
-    users_formatted = "\n".join([f"👤 `{u}`" for u in recent_users])
-
-    text = (
-        f"📊 **إحصائيات البوت:**\n\n"
-        f"عدد المستخدِمين الإجمالي: **{count}** مستخدم.\n\n"
-        f"📋 **قائمة أحدث المشتركين:**\n"
-        f"{users_formatted}"
-    )
-    
-    bot.reply_to(message, text, parse_mode="Markdown")
+    count = get_users_count()
+    bot.reply_to(message, f"📊 **إحصائيات البوت:**\n\nعدد المستخدِمين الإجمالي: **{count}** مستخدم.")
 
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
-    user = message.from_user
-    save_user(user)
-    user_ad_status[user.id] = False 
+    user_id = message.from_user.id
+    save_user(user_id)
+    user_ad_status[user_id] = False 
     
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("🔗 1. تابعنا على إنستغرام (@mah__asw)", url=INSTAGRAM_URL))
@@ -96,9 +65,8 @@ def after_instagram(call):
 
 @bot.message_handler(func=lambda message: True)
 def handle_download(message):
-    user = message.from_user
-    user_id = user.id
-    save_user(user)
+    user_id = message.from_user.id
+    save_user(user_id)
     text = message.text.strip()
     
     if text.startswith('http'):
